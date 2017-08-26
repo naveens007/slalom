@@ -11,6 +11,7 @@ Michael Carter  11/28/90
 
 Sample Results:
 ================
+```
 1.
 -------------------------------------------------------------------
 Machine:  Raspberry pi 3      Processor:  armv7l
@@ -27,3 +28,4 @@ M ops:    13477               Time:       63.005 seconds
 n:        2390                MFLOPS:     213.9
 Approximate data memory use: 45984400 bytes.
 -------------------------------------------------------------------
+```
