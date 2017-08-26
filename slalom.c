@@ -251,15 +251,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine:  Raspberry pi 3       Processor:  ARM",
-        "Memory:   1 GB                # of procs: 1",
-        "Cache:                        # used:     1",
-        "NMAX:     512                  Clock:      25 MHz",
+        "Machine:  Raspberry pi 3       Processor:  armv7l",
+        "Memory:   1 GB                 # of procs: 1",
+        "Cache:                         # used:     1",
+        "NMAX:     4096                 Clock:      700 MHz",
         "Disk:     4GB Flash            Node name:  raspberry",
-        "OS:       raspbian lite        Timer:      Wall, gettimeofday()",
+        "OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()",
         "Language: C                    Alone:      yes",
         "Compiler: gcc                  Run by:     Naveen Sharma",
-        "Options:  -O3                  Date:       August 2017",
+        "Options:  -O3                  Date:       27 August 2017",
         NULL
     };
 
