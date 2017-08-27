@@ -150,6 +150,7 @@
 
 #include	<stdlib.h>
 #include	<stdio.h>
+#include	<unistd.h>
 #include	<math.h>
 #include	<sys/time.h>
 
@@ -180,6 +181,9 @@ int mean,			/* Avg between upper and lower bounds for bisection   */
 void SetUp1 (),			/* Set up matrix to solve.                            */
      SetUp2 (),			/* Set up matrix to solve.                            */
      Solver ();			/* Solve the radiosity matrix.                        */
+
+/* Fix warnings. */
+int What (int, double, double);
 
 main ()
 {
@@ -253,12 +257,12 @@ double timing, work;
     {
         "Machine:  Raspberry pi 3       Processor:  armv7l",
         "Memory:   1 GB                 # of procs: 1",
-        "Cache:                         # used:     1",
+        "Cache:    L1 16KB              # used:     1",
         "NMAX:     4096                 Clock:      700 MHz",
-        "Disk:     4GB Flash            Node name:  raspberry",
+        "Disk:     32 GB Flash          Node name:  raspberry",
         "OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()",
         "Language: C                    Alone:      yes",
-        "Compiler: gcc                  Run by:     Naveen Sharma",
+        "Compiler: gcc (5.4)            Run by:     Naveen Sharma",
         "Options:  -O3                  Date:       27 August 2017",
         NULL
     };
@@ -420,7 +424,7 @@ When ()
 /* The following routine reads in the problem description from secondary     */
 /* storage, and checks that numbers are in reasonable ranges.                */
 /*****************************************************************************/
-Reader (box, rho, emiss)
+int Reader (box, rho, emiss)
 double box[],		/* Out: Dimensions of box in x, y, z directions.  */
        rho[][3],		/* Out: (RGB) Reflectivities of patches.          */
        emiss[][3];		/* Out: (RGB) emissivities of patches.            */
@@ -530,7 +534,7 @@ double box[],		/* Out: Dimensions of box in x, y, z directions.  */
 /* The following routine decomposes the surface of a variable-sized box      */
 /* into patches that are as nearly equal in size and square as possible.     */
 /*****************************************************************************/
-Region (npatch, loop, box, place, size, area)
+int Region (npatch, loop, box, place, size, area)
 int npatch,		/* In: Problem size.                             */
     loop[][2];		/* Out: Patch number ranges for faces.           */
 double area[],		/* Out: 8pi * areas of the patches.              */
@@ -947,7 +951,7 @@ double coeff[][NMAX],	/* In/Out: The coefficients of the eqns to solve.    */
 /*****************************************************************************/
 /* The following routine writes the answer to secondary storage.             */
 /*****************************************************************************/
-Storer (npatch, loop, place, size, result)
+int Storer (npatch, loop, place, size, result)
 int npatch,		/* In: Problem size.                                 */
     loop[][2];		/* In: Patch number ranges for faces.                */
 double result[][NMAX],	/* In: (RGB) Radiosity solutions.                    */

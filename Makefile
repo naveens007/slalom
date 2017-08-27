@@ -10,7 +10,7 @@
 #
 CC		= gcc
 FC		= f77
-CFLAGS	= -O3 $(ARCH) -DSUN4
+CFLAGS	= -O3 $(ARCH) -Wno-implicit-int -Wno-unused-result
 COFLAGS= 
 CLIBES	= -lm
 TARGETS	= slalom

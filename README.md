@@ -39,9 +39,23 @@ OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()
           GNU/Linux 4.4
 Language: C                   Alone:      yes
 Compiler: gcc v5.4            Run by:     Naveen Sharma
-Options:  -O3                 Date:       27 August 2017
+Options:  -O3 -DSUN4          Date:       27 August 2017
 M ops:    12103.3             Time:       54.067 seconds
 n:        2303                MFLOPS:     223.86
 Approximate data memory use: 42707632 bytes.
-
+-------------------------------------------------------------------
+3.
+Machine:  Raspberry pi 3       Processor:  armv7l
+Memory:   1 GB                 # of procs: 1
+Cache:    L1 16KB              # used:     1
+NMAX:     4096                 Clock:      700 MHz
+Disk:     32 GB Flash          Node name:  raspberry
+OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()
+Language: C                    Alone:      yes
+Compiler: gcc (5.4)            Run by:     Naveen Sharma
+Options:  -O3                  Date:       27 August 2017
+M ops:    9377.82              Time:       61.439 seconds
+n:        2109                 MFLOPS:     152.64
+Approximate data memory use: 35836928 bytes.
+-------------------------------------------------------------------
 ```
