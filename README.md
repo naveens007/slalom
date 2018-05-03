@@ -58,4 +58,18 @@ M ops:    9377.82              Time:       61.439 seconds
 n:        2109                 MFLOPS:     152.64
 Approximate data memory use: 35836928 bytes.
 -------------------------------------------------------------------
+
+Machine:  64 Bit       Processor:  x86-64
+Memory:   2 GB                 # of procs: 1
+Cache:                         # used:     1
+NMAX:     4096                 Clock:      3 GHz
+Disk:     20 GB                Node name:  centos
+OS:       Centos 7             Timer:      Wall, gettimeofday()
+Language: C                    Alone:      yes
+Compiler: gcc                  Run by:     Naveen Sharma
+Options:  -O3                  Date:       03 May 2018
+M ops:    44824.4              Time:       29.942 seconds
+n:        3606                 MFLOPS:     1497.1
+
+----------------------------------------------------------------------
 ```
