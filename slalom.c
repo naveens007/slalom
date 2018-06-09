@@ -255,15 +255,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine:  Raspberry pi 3       Processor:  armv7l",
-        "Memory:   1 GB                 # of procs: 1",
-        "Cache:    L1 16KB              # used:     1",
-        "NMAX:     4096                 Clock:      700 MHz",
-        "Disk:     32 GB Flash          Node name:  raspberry",
-        "OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()",
+        "Machine:  Intel             Processor:  x86_64",
+        "Memory:   1 GB                 # of procs: 2",
+        "Cache:    L1 256KB              # used:     2",
+        "NMAX:     4096                 Clock:      3.2 GHz",
+        "Disk:     40 GB                Node name:  linux-dev-001",
+        "OS:       CentOS 7          Timer:      Wall, gettimeofday()",
         "Language: C                    Alone:      yes",
-        "Compiler: gcc (5.4)            Run by:     Naveen Sharma",
-        "Options:  -O3                  Date:       27 August 2017",
+        "Compiler: gcc (4.8)            Run by:     Naveen Sharma",
+        "Options:  -O3 -DSUN4           Date:       June 2018",
         NULL
     };
 
