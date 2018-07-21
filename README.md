@@ -187,5 +187,18 @@ Options:  -O3                  Date:       03 May 2018
 M ops:    44824.4              Time:       29.942 seconds
 n:        3606                 MFLOPS:     1497.1
 
+Machine:  Intel             Processor:  x86_64
+Memory:   16 GB             # of procs: 1
+Cache:    L1 256KB             # used:     1
+NMAX:     4096                 Clock:      3.2 GHz
+Disk:     > 100 GB             Node name:  linux-dev-001
+OS:       Windows 10 with WSO  Timer:      Wall, gettimeofday()
+Language: C                    Alone:      yes
+Compiler: gcc (7.3)            Run by:     Naveen Sharma
+Options:  -O3 -DSUN4           Date:       July 2018
+M ops:    30671.5              Time:       14.864 seconds
+n:        3168                 MFLOPS:     2063.5
+Approximate data memory use: 80670752 bytes.
+
 ----------------------------------------------------------------------
 ```
