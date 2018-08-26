@@ -174,9 +174,9 @@ M ops:    9377.82              Time:       61.439 seconds
 n:        2109                 MFLOPS:     152.64
 Approximate data memory use: 35836928 bytes.
 -------------------------------------------------------------------
-
+4.
 Machine:  64 Bit       Processor:  x86-64
-Memory:   2 GB                 # of procs: 1
+Memory:   2 GB                 # of procs: 2
 Cache:                         # used:     1
 NMAX:     4096                 Clock:      3 GHz
 Disk:     20 GB                Node name:  centos
@@ -187,8 +187,10 @@ Options:  -O3                  Date:       03 May 2018
 M ops:    44824.4              Time:       29.942 seconds
 n:        3606                 MFLOPS:     1497.1
 
+-------------------------------------------------------------------
+5.
 Machine:  Intel             Processor:  x86_64
-Memory:   16 GB             # of procs: 1
+Memory:   16 GB                # of procs: 4
 Cache:    L1 256KB             # used:     1
 NMAX:     4096                 Clock:      3.2 GHz
 Disk:     > 100 GB             Node name:  linux-dev-001
@@ -201,4 +203,19 @@ n:        3168                 MFLOPS:     2063.5
 Approximate data memory use: 80670752 bytes.
 
 ----------------------------------------------------------------------
+6.
+Machine:  Intel             Processor:  x86_64
+Memory:   16 GB                # of procs: 4
+Cache:    L1 256KB             # used:     1
+NMAX:     8196              Clock:      3.2 GHz
+Disk:     8 GB              Node name:  linux-dev-001
+OS:       Linux Mint        Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc (7.8)         Run by:     Naveen Sharma
+Options:  -O3 -DSUN4        Date:       2018
+M ops:    65619.3           Time:       30.539 seconds
+n:        4105              MFLOPS:     2148.7
+Approximate data memory use: 135301600 bytes.
+
+-------------------------------------------------------------------
 ```
