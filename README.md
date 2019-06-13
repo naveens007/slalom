@@ -218,4 +218,18 @@ n:        4105              MFLOPS:     2148.7
 Approximate data memory use: 135301600 bytes.
 
 -------------------------------------------------------------------
+7.
+Machine: ARMv7L              Processor:  32 bit
+Memory:   1 GB               # of procs: 4
+Cache:    L1 256KB           # used:     1
+NMAX:    2048              Clock:      1.4 GHz
+Disk:    32 GB             Node name:  raspberry-3b-pls
+OS:      Ubuntu Mate 18.04  Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc (7.4)         Run by:     Hemanya Sharma
+Options:  -O2 -DSUN4        Date:       2019
+M ops:    6472.54           Time:       29.818 seconds
+n:        1855              MFLOPS:     217.06
+Approximate data memory use: 27751600 bytes.
+
 ```

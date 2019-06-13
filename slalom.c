@@ -155,7 +155,7 @@
 #include	<sys/time.h>
 
 /* NMAX = Largest npatch for your computer; adjust as needed. */
-#define		NMAX		8192
+#define		NMAX		2048
 #define		EPS		(0.5e-8)
 #define		FALSE		(1==0)
 #define		TRUE		(!FALSE)
@@ -255,15 +255,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine:  Intel             Processor:  x86_64",
-        "Memory:   16 GB                # of procs: 4",
-        "Cache:    L1 256KB             # used:     1",
-        "NMAX:     8196              Clock:      3.2 GHz",
-        "Disk:     8 GB              Node name:  linux-dev-001",
-        "OS:       CentOS 7          Timer:      Wall, gettimeofday()",
+        "Machine: ARMv7L              Processor:  32 bit",
+        "Memory:   1 GB               # of procs: 4",
+        "Cache:    L1 256KB           # used:     1",
+        "NMAX:     8196              Clock:      1.4 GHz",
+        "Disk:    32 GB              Node name:  raspberry-3b-pls",
+        "OS:      Ubuntu Mate 18.04  Timer:      Wall, gettimeofday()",
         "Language: C                 Alone:      yes",
-        "Compiler: gcc (7.8)         Run by:     Naveen Sharma",
-        "Options:  -O3 -DSUN4        Date:       2018",
+        "Compiler: gcc (7.4)         Run by:     Hemanya Sharma",
+        "Options:  -O2 -DSUN4        Date:       2019",
         NULL
     };
 
