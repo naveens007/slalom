@@ -83,7 +83,7 @@ Machine:  Intel             Processor:  x86_64
 Memory:   16 GB                # of procs: 4
 Cache:    L1 256KB             # used:     1
 NMAX:     4096                 Clock:      3.2 GHz
-Disk:     > 100 GB             Node name:  linux-dev-001
+Disk:     100 GB              Node name:  dev-001 
 OS:       Windows 10 with WSO  Timer:      Wall, gettimeofday()
 Language: C                    Alone:      yes
 Compiler: gcc (7.3)            Run by:     Naveen Sharma
@@ -134,5 +134,19 @@ Compiler: gcc (7.4)         Run by:     Naveen  Sharma
 Options:  -O2 -DSUN4        Date:       2019
 M ops:    59594.1              Time:       29.958 seconds
 n:        3973                 MFLOPS:     1989.2
-
+-------------------------------------------------------------------
+9.
+Machine: x86_64             Processor:  64 bit
+Memory:  16 GB              # of procs: 4
+Cache:                      # used:     1
+NMAX:    8196               Clock:      2.71 GHz
+Disk:    100 GB             Node name:  x86-dev
+OS:Ubuntu 18.04.4 LTS    
+  on Windows 10 x86_64     Timer:      Wall, gettimeofday()
+Language: C                Alone:      yes
+Compiler: gcc              Run by:     Naveen  Sharma
+Options:  -O2 -DSUN4       Date:       2020
+M ops:    25619.9              Time:       15.335 seconds
+n:        2979                 MFLOPS:     1670.6
+Approximate data memory use: 71353808 bytes.
 ```
