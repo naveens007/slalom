@@ -1,19 +1,31 @@
-SERIAL C SLALOM
+#  SLALOM
+## Scalable Language-independent Ames Laboratory One-minute Measurement
 
-This directory contains the source code for the unoptimized version of the
-SLALOM benchmark for any uniprocessor system.  This the the plain-vanilla
+This directory contains the source code for the non-optimized version of the
+SLALOM benchmark for any uni processor system.  This the the plain-vanilla
 version.  The only enhancement for speed is the function DDot() which
 performs a double-precision dot-product.  At present, the only DDot()
 implemented is for a Sun 4 (SPARC).  Other RISC systems' versions should be
 very similar.
 
-Michael Carter  11/28/90
+ ## Build
+Please build the benchmark using the following command:
 ```
-/******************************************************************************
-                               S L A L O M
-  Scalable Language-independent Ames Laboratory One-minute Measurement
-******************************************************************************/
+$ cd slalom
+$ make 
 ```
+The binary named slalom will be built.
+
+## Running the Benchmark
+
+``` $ ./slalom ```
+
+The program will prompt for the amount of time you want to solve the surface rendering problem. The benchmark is scalable because it measures the capability of hardware to solve the amount of the problem. Not the other way round, as is the case with other benchmarks. An example is given below.
+```
+Enter the number of seconds that is the goal: 15
+Enter a lower bound for n: 2000
+```
+The lower bound can be any integer between 0 to NMAX value. (default set to 4096). The upper bound will be the value between lower bound and NMAX.
 
 Sample Results:
 ================
