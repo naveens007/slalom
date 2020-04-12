@@ -149,4 +149,19 @@ Options:  -O2 -DSUN4       Date:       2020
 M ops:    25619.9              Time:       15.335 seconds
 n:        2979                 MFLOPS:     1670.6
 Approximate data memory use: 71353808 bytes.
+---------------------------------------------------------------------
+10.
+Machine: x86_64             Processor:  64 bit
+Memory:  16 GB              # of procs: 4
+Cache:                      # used:     1
+NMAX:    8196               Clock:      1.4 GHz
+Disk:    256 GB             Node name:  x86-dev
+OS: Debian buster           4.4.0-17763-Microsoft       Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc (7.4)         Run by:     Naveen  Sharma
+Options:  -O2 -DSUN4        Date:       2020
+M ops:    26944.8              Time:       15.488 seconds
+n:        3031                 MFLOPS:     1739.7
+Approximate data memory use: 73860208 bytes.
+
 ```
