@@ -189,4 +189,18 @@ Options:  -O2 -DSUN4        Date:       2020
 M ops:    22743.4              Time:       14.827 seconds
 n:        2860                 MFLOPS:     1533.9
 Approximate data memory use: 65780800 bytes.
+---------------------------------------------------------------------
+12.
+Machine: x86_64             Processor:  64 bit i7-9750H
+Memory:  16 GB              # of procs: 12
+Cache:                      # used:     1
+NMAX:    8196               Clock:      3.1 GHz
+Disk:    512 GB             Node name:  x86-dev
+OS:      ubuntu budgie      Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc               Run by:     Naveen  Sharma
+Options:  -O2 -DSUN4        Date:       23 May 2020
+M ops:    35805.1           Time:       15.665 seconds
+n:        3340              MFLOPS:     2285.7
+Approximate data memory use: 89646400 bytes.
 ```

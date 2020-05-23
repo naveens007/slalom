@@ -255,15 +255,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine: x86_64             Processor:  64 bit i5-7200U",
-        "Memory:  16 GB              # of procs: 4",
+        "Machine: x86_64             Processor:  64 bit i7-9750H",
+        "Memory:  16 GB              # of procs: 12",
         "Cache:                      # used:     1",
         "NMAX:    8196               Clock:      3.1 GHz",
-        "Disk:    256 GB             Node name:  x86-dev",
-        "OS:      Pop!_OS            Timer:      Wall, gettimeofday()",
+        "Disk:    512 GB             Node name:  x86-dev",
+        "OS:      ubuntu budgie            Timer:      Wall, gettimeofday()",
         "Language: C                 Alone:      yes",
-        "Compiler: gcc (7.4)         Run by:     Naveen  Sharma",
-        "Options:  -O2 -DSUN4        Date:       2020",
+        "Compiler: gcc               Run by:     Naveen  Sharma",
+        "Options:  -O2 -DSUN4        Date:       23 May 2020",
         NULL
     };
 
