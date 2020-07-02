@@ -203,4 +203,18 @@ Options:  -O2 -DSUN4        Date:       23 May 2020
 M ops:    35805.1           Time:       15.665 seconds
 n:        3340              MFLOPS:     2285.7
 Approximate data memory use: 89646400 bytes.
+----------------------------------------------------------------------
+13.
+Machine: x86_64             Processor:  64 bit i7-10750H
+Memory:  16 GB              # of procs: 12
+Cache:                      # used:     1
+NMAX:    8196               Clock:      3.1 GHz
+Disk:    512 GB NVMe        Node name:  x86-dev
+OS:      Pop!_OS 20.04      Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc               Run by:     Naveen SHarma
+Options:  -O2 -DSUN4        Date:       1 July 2020
+M ops:    36916.7              Time:       15.618 seconds
+n:        3375                 MFLOPS:     2363.7
+Approximate data memory use: 91530800 bytes.
 ```
