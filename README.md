@@ -36,7 +36,7 @@ Machine:  Raspberry pi 3      Processor:  armv7l
 Memory:   1 GB                # of procs: 1
 Cache:                        # used:     1
 NMAX:     4096                Clock:     700 MHz
-Disk:     4GB Flash           Node name: Model 3 
+Disk:     4GB microSD         Node name: Model 3 
 OS:       raspbian lite
           GNU/Linux 4.9       Timer:      Wall, gettimeofday()
 Language: C                   Alone:      yes
@@ -68,7 +68,7 @@ Memory:   1 GB                 # of procs: 1
 Cache:    L1 16KB              # used:     1
 NMAX:     4096                 Clock:      700 MHz
 Disk:     32 GB Flash          Node name:  raspberry
-OS:       Ubuntu Mate          Timer:      Wall, gettimeofday()
+OS:       Ubuntu Mate 18.04    Timer:      Wall, gettimeofday()
 Language: C                    Alone:      yes
 Compiler: gcc (5.4)            Run by:     Naveen Sharma
 Options:  -O3                  Date:       27 August 2017
@@ -182,7 +182,7 @@ Memory:  16 GB              # of procs: 4
 Cache:                      # used:     1
 NMAX:    8196               Clock:      3.1 GHz
 Disk:    USB3.0 8 GB        Node name:  x86-dev
-OS:      Pop!_OS            Timer:      Wall, gettimeofday()
+OS:  Pop!_OS 20.04 live USB Timer:      Wall, gettimeofday()
 Language: C                 Alone:      yes
 Compiler: gcc (7.4)         Run by:     Naveen  Sharma
 Options:  -O2 -DSUN4        Date:       2020
@@ -195,8 +195,8 @@ Machine: x86_64             Processor:  64 bit i7-9750H
 Memory:  16 GB              # of procs: 12
 Cache:                      # used:     1
 NMAX:    8196               Clock:      3.1 GHz
-Disk:    512 GB             Node name:  x86-dev
-OS:      ubuntu budgie      Timer:      Wall, gettimeofday()
+Disk:    512 GB  NVMe       Node name:  x86-dev
+OS:    Ubuntu Budgie 20.04  Timer:      Wall, gettimeofday()
 Language: C                 Alone:      yes
 Compiler: gcc               Run by:     Naveen  Sharma
 Options:  -O2 -DSUN4        Date:       23 May 2020
