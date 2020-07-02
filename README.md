@@ -36,7 +36,7 @@ Machine:  Raspberry pi 3      Processor:  armv7l
 Memory:   1 GB                # of procs: 1
 Cache:                        # used:     1
 NMAX:     4096                Clock:     700 MHz
-Disk:     4GB microSD         Node name: Model 3 
+Disk:   4GB microSD (Class 4) Node name: Model 3 
 OS:       raspbian lite
           GNU/Linux 4.9       Timer:      Wall, gettimeofday()
 Language: C                   Alone:      yes
