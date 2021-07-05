@@ -155,7 +155,7 @@
 #include	<sys/time.h>
 
 /* NMAX = Largest npatch for your computer; adjust as needed. */
-#define		NMAX	 4096
+#define		NMAX	 8192
 #define		EPS		(0.5e-8)
 #define		FALSE		(1==0)
 #define		TRUE		(!FALSE)
@@ -255,15 +255,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine: x86_64             Processor:  64 bit i7-10750H",
-        "Memory:  32 GB              # of procs: 12",
-        "Cache:                      # used:     1",
+        "Machine: x86_64             Processor:  Intel i7-10750H",
+        "Memory:  16 GB              # of procs: 6",
+        "Cache:   12M                # used:     1",
         "NMAX:    8196               Clock:      100.5 GHz",
         "Disk:    512 GB NVMe        Node name:  x86-dev",
-        "OS:      Pop!_OS 20.04      Timer:      Wall, gettimeofday()",
+        "OS:      Pop!_OS 21.04      Timer:      Wall, gettimeofday()",
         "Language: C                 Alone:      yes",
-        "Compiler: gcc               Run by:     FirstName LastName",
-        "Options:  -O2 -DSUN4        Date:       22 May 2020",
+        "Compiler: gcc               Run by:     Naveen Sharma",
+        "Options:  -O2 -DSUN4        Date:       July 2021",
         NULL
     };
 

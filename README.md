@@ -186,8 +186,8 @@ OS:  Pop!_OS 20.04 live USB Timer:      Wall, gettimeofday()
 Language: C                 Alone:      yes
 Compiler: gcc (7.4)         Run by:     Naveen  Sharma
 Options:  -O2 -DSUN4        Date:       2020
-M ops:    22743.4              Time:       14.827 seconds
-n:        2860                 MFLOPS:     1533.9
+M ops:    22743.4           Time:       14.827 seconds
+n:        2860              MFLOPS:     1533.9
 Approximate data memory use: 65780800 bytes.
 ---------------------------------------------------------------------
 12.
@@ -205,16 +205,30 @@ n:        3340              MFLOPS:     2285.7
 Approximate data memory use: 89646400 bytes.
 ----------------------------------------------------------------------
 13.
-Machine: x86_64             Processor:  64 bit i7-10750H
-Memory:  16 GB              # of procs: 12
+Machine: x86_64             Processor:  64 bit i7-9750H
+Memory:  16 GB              # of procs: 6 
 Cache:                      # used:     1
 NMAX:    8196               Clock:      3.1 GHz
 Disk:    512 GB NVMe        Node name:  x86-dev
 OS:      Pop!_OS 20.04      Timer:      Wall, gettimeofday()
 Language: C                 Alone:      yes
 Compiler: gcc               Run by:     Naveen SHarma
-Options:  -O2 -DSUN4        Date:       1 July 2020
-M ops:    36916.7              Time:       15.618 seconds
-n:        3375                 MFLOPS:     2363.7
+Options:  -O2 -DSUN4        Date:       July 2020
+M ops:    36916.7           Time:       15.618 seconds
+n:        3375              MFLOPS:     2363.7
 Approximate data memory use: 91530800 bytes.
+----------------------------------------------------------------------
+Machine: x86_64             Processor:  Intel i7-9750H
+Memory:  16 GB              # of procs: 6
+Cache:   12M                # used:     1
+NMAX:    8196               Clock:      2.6 GHz
+Disk:    512 GB NVMe        Node name:  x86-dev
+OS:      Pop!_OS 21.04      Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc               Run by:     Naveen Sharma
+Options:  -O2 -DSUN4        Date:       July 2021
+M ops:    73387.8           Time:       30.250 seconds
+n:        4264              MFLOPS:     2426
+Approximate data memory use: 145966048 bytes.
+----------------------------------------------------------------------
 ```
