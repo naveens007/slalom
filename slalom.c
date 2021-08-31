@@ -255,15 +255,15 @@ double timing, work;
     int i;
     static char *info[] =
     {
-        "Machine: x86_64             Processor:  Intel i7-10750H",
-        "Memory:  16 GB              # of procs: 6",
+        "Machine: x86_64             Processor:  Intel i5-7200U",
+        "Memory:  16 GB              # of procs: 4",
         "Cache:   12M                # used:     1",
-        "NMAX:    8196               Clock:      100.5 GHz",
-        "Disk:    512 GB NVMe        Node name:  x86-dev",
-        "OS:      Pop!_OS 21.04      Timer:      Wall, gettimeofday()",
+        "NMAX:    8196               Clock:      2.712 GHz",
+        "Disk:    512 GB             Node name:  DLLT-6197",
+        "OS:      Windows 10         Timer:      Wall, gettimeofday()",
         "Language: C                 Alone:      yes",
         "Compiler: gcc               Run by:     Naveen Sharma",
-        "Options:  -O2 -DSUN4        Date:       July 2021",
+        "Options:  -O2 -DSUN4        Date:       Sept 2021",
         NULL
     };
 
@@ -1075,7 +1075,7 @@ register double *a,	/* Pointer to first vector.        */
 {
     register double sum0 = 0.0, sum1 = 0.0, sum2 = 0.0, sum3 = 0.0;
     register int m = n & 3;
-    int t;
+    size_t t; /* int t. Fix pointer to integer cast warnings.  */ ;
 
     /* The ragged cleanup part. */
     while (m--)
@@ -1092,7 +1092,7 @@ register double *a,	/* Pointer to first vector.        */
             t = ia;
             ia = ib;
             ib = t;
-            t = (int) a;
+            t = (size_t) a;
             b = a;
             a = (double *) t;
         }
