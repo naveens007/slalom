@@ -218,8 +218,9 @@ M ops:    36916.7           Time:       15.618 seconds
 n:        3375              MFLOPS:     2363.7
 Approximate data memory use: 91530800 bytes.
 ----------------------------------------------------------------------
+14.
 Machine: x86_64             Processor:  Intel i7-9750H
-Memory:  16 GB              # of procs: 6
+memory:  16 GB              # of procs: 6
 Cache:   12M                # used:     1
 NMAX:    8196               Clock:      2.6 GHz
 Disk:    512 GB NVMe        Node name:  x86-dev
@@ -231,4 +232,20 @@ M ops:    73387.8           Time:       30.250 seconds
 n:        4264              MFLOPS:     2426
 Approximate data memory use: 145966048 bytes.
 ----------------------------------------------------------------------
+
+15. 
+Mchine: x86_64             Processor:  Intel i5-7200U
+Memory:  16 GB              # of procs: 4
+Cache:   12M                # used:     1
+NMAX:    8196               Clock:      2.712 GHz
+Disk:    512 GB             Node name:  DLLT-6197
+OS:      Windows 10         Timer:      Wall, gettimeofday()Language: C                 Alone:      yes
+Compiler: gcc               Run by:     Naveen Sharma
+Options:  -O2 -DSUN4        Date:       Sept 2021
+M ops:    120500            Time:       57.135 seconds
+n:        5045              MFLOPS:     2109
+Approximate data memory use: 204222400 bytes
+
+----------------------------------------------------------------------
+
 ```
