@@ -11,21 +11,19 @@ very similar.
  ## Build
 Please build the benchmark using the following command:
 ```
-$ cd slalom
-$ make 
+$ cmake -S /path/to/source -B /path/to/build_directory
+$ make -C /path/to/build_directory
 ```
-The binary named slalom will be built.
+The binary named slalom will be built at /path/to/build_directory/bin
 
 ## Running the Benchmark
 
-``` $ ./slalom ```
+``` $ ./slalom  -t 10 -l 400 -u 4000```
 
-The program will prompt for the amount of time you want to solve the surface rendering problem. The benchmark is scalable because it measures the capability of hardware to solve the amount of the problem. Not the other way round, as is the case with other benchmarks. An example is given below.
-```
-Enter the number of seconds that is the goal: 15
-Enter a lower bound for n: 2000
-```
-The lower bound can be any integer between 0 to NMAX value. (default set to 4096). The upper bound will be the value between lower bound and NMAX.
+The -t option specifies amount of time you want to solve the surface rendering problem. The benchmark is scalable because it measures the capability of hardware to solve the amount of the problem. Not the other way round, as is the case with other benchmarks. 
+
+The lower bound can be any integer between 0 to NMAX value. (default set to 4096). 
+The upper bound will be the value greater than lower bound and but below NMAX (which is currently defined as 8192).
 
 Sample Results:
 ================
