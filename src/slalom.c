@@ -108,7 +108,7 @@ int slalom_main_loop(
 int What(int n, double timing, double work)
 {
     int i;
-    static char *info[] =
+    static const char *info[] =
         {
             "Machine: x86_64             Processor:  Intel i5-7200U",
             "Memory:  16 GB              # of procs: 4",
@@ -173,13 +173,13 @@ int Meter(int npatch, double *timing, double *work)
         itmp1,                /* Integer temporary variable.               */
         non0;                 /* Index of first nonzero off-diagonal elem. */
     static int loop[6][2] = {0};   /* Patch number ranges for faces.            */
-    static char *tasks[] =    /* Names of all the functions in benchmark.  */
+    static const char *tasks[] =    /* Names of all the functions in benchmark.  */
         {
             "Reader", "Region",
             "SetUp1", "SetUp2",
             "SetUp3", "Solver",
             "Storer"};
-    static char *format = /* Output line format.                       */
+    static const char *format = /* Output line format.                       */
         "%6.6s%8.3f%17.0f%14.6f%10.1f %%\n";
 
     /* First check that npatch lies between 6 and NMAX: */
