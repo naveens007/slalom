@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "slalom.h"
 
-int errmsg(char *msg);
+int errmsg(const char *msg);
 int help_message();
 
 /* Parameters used in controlling the slalom benchmark. */
@@ -142,7 +142,7 @@ int help_message()
     return -1;
 }
 
-int errmsg(char *msg)
+int errmsg(const char *msg)
 {
     fprintf(stderr, "Error: %s\n", msg);
     return -1;
