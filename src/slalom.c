@@ -107,30 +107,20 @@ int slalom_main_loop(
 /*****************************************************************************/
 int What(int n, double timing, double work)
 {
-    int i;
-    static const char *info[] =
-        {
-            "Machine: x86_64             Processor:  Intel i5-7200U",
-            "Memory:  16 GB              # of procs: 4",
-            "Cache:   12M                # used:     1",
-            "NMAX:    8196               Clock:      2.712 GHz",
-            "Disk:    512 GB             Node name:  DLLT-6197",
-            "OS:      Windows 10         Timer:      Wall, gettimeofday()",
-            "Language: C                 Alone:      yes",
-            "Compiler: gcc               Run by:     Naveen Sharma",
-            "Options:  -O2 -DSUN4        Date:       Sept 2021",
-            NULL};
-
-    printf("\n");
-    for (i = 0; info[i]; i++)
-        puts(info[i]);
-    printf("M ops:    %-13lg        Time:       %-.3lf seconds\n",
+   printf("\n");
+#include "system_info.h"
+   /* Get the system information and output it before actual performance stats.  */
+   MachineInfo *info_ptr = get_system_info ();
+   system_info (info_ptr);
+    
+   printf("\n");
+   printf("M ops:    %-13lg        Time:       %-.3lf seconds\n",
            work * 1e-6, timing);
-    printf("n:        %-6d               MFLOPS:     %-.5lg\n",
+   printf("n:        %-6d               MFLOPS:     %-.5lg\n",
            n, (work / timing) * 1e-6);
-    printf("Approximate data memory use: %d bytes.\n",
+   printf("Approximate data memory use: %d bytes.\n",
            8 * n * n + 120 * n + 800);
-    return 0;
+   return 0;
 }
 
 /*****************************************************************************/
