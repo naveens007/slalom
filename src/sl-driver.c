@@ -150,3 +150,31 @@ int errmsg(const char *msg)
     fprintf(stderr, "Error: %s\n", msg);
     return -1;
 }
+
+#include <string.h>
+#include <unistd.h>
+#include <libgen.h>
+/**
+ * The following is a wrapper for fopen () function declared in stdio.h.
+ * It adds the absolute path of the binary where the executable resides.
+ * This is needed because 'geom' file in the benchmark needs to be in the same directory
+ * as binary 'slalom' is. Otherwise benchmark has to be run by changing the current
+ * working directory to the binary location (that is cumbersome and non-intutive.)
+ */
+
+FILE *fopen_p(const char *infile, const char *mode)
+{
+    FILE *file_handle = 0;
+    char pathname[BUFSIZ] = {0};
+    static char dir_name[BUFSIZ] = {0};
+    /* re initialize at every call. */
+    strcpy (dir_name,"");
+    /* Check where is the binary running. Linux Specific. */
+    readlink("/proc/self/exe", pathname, BUFSIZ);
+    strcpy(dir_name, dirname (pathname));
+    strcat(dir_name, "/");
+    strcat(dir_name, infile);
+    // printf ("Geometry at:%s\n", dir_name);
+    file_handle = fopen(dir_name, "r");
+    return file_handle;
+}

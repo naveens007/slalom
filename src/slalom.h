@@ -147,6 +147,7 @@
 /*  Calls:  Meter   Measures execution time for some application.            */
 /*          What    Prints work-timing statistics and system information.    */
 /*****************************************************************************/
+#include <stdio.h>
 
 #ifndef __SLALOM_H__
 #define __SLALOM_H__
@@ -166,5 +167,8 @@ int slalom_main_loop(
     int upper_bound  /* Upper bound on problem size, used in iterating toward goal.  */
 );
 int Meter (int npatch, double * timing, double *work);
+
+/* Wrapper for std fopen to consider absolute path where binary resides. */
+FILE *fopen_p(const char *pathname, const char *mode);
 
 #endif

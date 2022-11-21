@@ -83,7 +83,7 @@ int system_info (MachineInfo *p_info)
 #endif
     printf("Machine:%s\t\t Processor:  %s\n", p_info->arch, p_info->proc);
     printf("Memory:(%5.2f/%5.2f) GB\t # of procs: %d\n", p_info->used_ram, p_info->total_ram, p_info->cores);
-    printf("L1iCache:%d(KB)\t\t # used:1\n", p_info->l1i_cache);
+    printf("L1 iCache:%d KB\t\t # used:1\n", p_info->l1i_cache);
     printf("NMAX:%5d \t\t Clock:%5.2fGHz\n",p_info->nmax, p_info->clock_speed);
     printf("OS:%s\t\t Timer:Wall, gettimeofday()\n",p_info->os_string);
     printf("L2 Cache:%d KB\t Node name: %s\n",p_info->l2_cache, p_info->node_name);

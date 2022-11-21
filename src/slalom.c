@@ -284,7 +284,7 @@ int Reader(double box[],      /* Out: Dimensions of box in x, y, z directions.  
     char buff[81]; /* Buffer used to eat a line of input.       */
 
     /* Open the input file and read in the data. */
-    if ((infile = fopen("geom", "r")) == NULL)
+    if ((infile = fopen_p("geom", "r")) == NULL)
         {
             printf("slalom:  'geom' geometry file not found.\n");
             exit(1);
