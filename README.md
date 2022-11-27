@@ -3,7 +3,7 @@
 
 This directory contains the source code for the non-optimized version of the
 SLALOM benchmark for any uni processor system. It means that this benchmark can tell
-performance for that processor, without regarding any external data.
+performance for that processor, without needing any external data.
 This the the plain-vanilla version.  The only enhancement for speed is the function 
 DDot() which performs a double-precision dot-product.  At present, the only DDot()
 implemented is for a typical RISC architecture.
