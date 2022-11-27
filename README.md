@@ -2,11 +2,14 @@
 ## Scalable Language-independent Ames Laboratory One-minute Measurement
 
 This directory contains the source code for the non-optimized version of the
-SLALOM benchmark for any uni processor system.  This the the plain-vanilla
-version.  The only enhancement for speed is the function DDot() which
-performs a double-precision dot-product.  At present, the only DDot()
-implemented is for a Sun 4 (SPARC).  Other RISC systems' versions should be
-very similar.
+SLALOM benchmark for any uni processor system. It means that this benchmark can tell
+performance for that processor, without regarding any external data.
+This the the plain-vanilla version.  The only enhancement for speed is the function 
+DDot() which performs a double-precision dot-product.  At present, the only DDot()
+implemented is for a typical RISC architecture.
+
+The benchmark will primarily test instruction shcheduling of an processor 
+architecture.
 
  ## Build
 Please build the benchmark using the following command:
@@ -75,7 +78,7 @@ n:        2109                 MFLOPS:     152.64
 Approximate data memory use: 35836928 bytes.
 -------------------------------------------------------------------
 4.
-Machine:  64 Bit       Processor:  x86-64
+Machine:  64 Bit               Processor:  x86-64
 Memory:   2 GB                 # of procs: 2
 Cache:                         # used:     1
 NMAX:     4096                 Clock:      3 GHz
@@ -90,16 +93,16 @@ n:        3606                 MFLOPS:     1497.1
 -------------------------------------------------------------------
 5.
 Machine:  Intel             Processor:  x86_64
-Memory:   16 GB                # of procs: 4
-Cache:    L1 256KB             # used:     1
-NMAX:     4096                 Clock:      3.2 GHz
-Disk:     100 GB              Node name:  dev-001 
-OS:       Windows 10 with WSO  Timer:      Wall, gettimeofday()
-Language: C                    Alone:      yes
-Compiler: gcc (7.3)            Run by:     Naveen Sharma
-Options:  -O3 -DSUN4           Date:       July 2018
-M ops:    30671.5              Time:       14.864 seconds
-n:        3168                 MFLOPS:     2063.5
+Memory:   16 GB             # of procs: 4
+Cache:    L1 256KB          # used:     1
+NMAX:     4096              Clock:      3.2 GHz
+Disk:     100 GB            Node name:  dev-001 
+OS:       Windows10(WSL)    Timer:      Wall, gettimeofday()
+Language: C                 Alone:      yes
+Compiler: gcc (7.3)         Run by:     Naveen Sharma
+Options:  -O3 -DSUN4        Date:       July 2018
+M ops:    30671.5           Time:       14.864 seconds
+n:        3168              MFLOPS:     2063.5
 Approximate data memory use: 80670752 bytes.
 
 ----------------------------------------------------------------------
@@ -119,9 +122,9 @@ Approximate data memory use: 135301600 bytes.
 
 -------------------------------------------------------------------
 7.
-Machine: ARMv7L              Processor:  32 bit
-Memory:   1 GB               # of procs: 4
-Cache:    L1 256KB           # used:     1
+Machine: ARMv7L            Processor:  32 bit
+Memory:   1 GB             # of procs: 4
+Cache:    L1 256KB         # used:     1
 NMAX:    2048              Clock:      1.4 GHz
 Disk:    32 GB             Node name:  raspberry-3b-pls
 OS:      Ubuntu Mate 18.04  Timer:      Wall, gettimeofday()
@@ -142,8 +145,8 @@ OS:      Ubuntu 18.04       Timer:      Wall, gettimeofday()
 Language: C                 Alone:      yes
 Compiler: gcc (7.4)         Run by:     Naveen  Sharma
 Options:  -O2 -DSUN4        Date:       2019
-M ops:    59594.1              Time:       29.958 seconds
-n:        3973                 MFLOPS:     1989.2
+M ops:    59594.1           Time:       29.958 seconds
+n:        3973              MFLOPS:     1989.2
 -------------------------------------------------------------------
 9.
 Machine: x86_64             Processor:  64 bit
