@@ -154,6 +154,22 @@ int errmsg(const char *msg)
 #include <string.h>
 #include <unistd.h>
 #include <libgen.h>
+
+/**
+ * Get the location of current working directory from where benchmark is invoked.
+ *
+ */
+const char *get_path_name ()
+{
+    static char pathname[BUFSIZ] = {0};
+    /* Check where is the binary running. Linux Specific. */
+    readlink("/proc/self/exe", pathname, BUFSIZ);
+
+    /* since we are returning static memory, no no need to worry
+     * about the memory allocation by the caller.. */
+    return pathname;
+}
+
 /**
  * The following is a wrapper for fopen () function declared in stdio.h.
  * It adds the absolute path of the binary where the executable resides.
@@ -165,16 +181,16 @@ int errmsg(const char *msg)
 FILE *fopen_p(const char *infile, const char *mode)
 {
     FILE *file_handle = 0;
-    char pathname[BUFSIZ] = {0};
-    static char dir_name[BUFSIZ] = {0};
-    /* re initialize at every call. */
-    strcpy (dir_name,"");
-    /* Check where is the binary running. Linux Specific. */
-    readlink("/proc/self/exe", pathname, BUFSIZ);
-    strcpy(dir_name, dirname (pathname));
+    char dir_name[BUFSIZ] = {0};
+
+    const char *pathname = get_path_name ();
+    
+    strcpy(dir_name, dirname ((char *) pathname));
     strcat(dir_name, "/");
     strcat(dir_name, infile);
+
     // printf ("Geometry at:%s\n", dir_name);
-    file_handle = fopen(dir_name, "r");
+    file_handle = fopen(dir_name, mode);
+
     return file_handle;
 }
