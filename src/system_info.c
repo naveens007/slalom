@@ -81,8 +81,9 @@ int system_info (MachineInfo *p_info)
         NULL
     };
 #endif
+    double mem_usage = (p_info->used_ram/p_info->total_ram) * 100;
     printf("Machine:%s\t\t Processor:  %s\n", p_info->arch, p_info->proc);
-    printf("Memory:(%5.2f/%5.2f) GB\t # of procs: %d\n", p_info->used_ram, p_info->total_ram, p_info->cores);
+    printf("Memory: %3.2f% \t\t # of procs: %d\n", mem_usage, p_info->cores);
     printf("L1 iCache:%d KB\t\t # used:1\n", p_info->l1i_cache);
     printf("NMAX:%5d \t\t Clock:%5.2fGHz\n",p_info->nmax, p_info->clock_speed);
     printf("OS:%s\t\t Timer:Wall, gettimeofday()\n",p_info->os_string);
@@ -146,7 +147,7 @@ char *benchmark_date_time ()
     time_t T = time(0);
     struct tm tm = *localtime(&T);
 
-    snprintf(date_time, BUFFER_SIZE, "%02d/%02d/%04d (dd/mm/yyyy) %02d:%02d:%02d",\
+    snprintf(date_time, BUFFER_SIZE, "%02d/%02d/%04d (dd/mm) %02d:%02d:%02d",\
              tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900,\
              tm.tm_hour, tm.tm_min, tm.tm_sec);
     return date_time;
