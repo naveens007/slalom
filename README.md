@@ -248,5 +248,19 @@ n:        5045              MFLOPS:     2109
 Approximate data memory use: 204222400 bytes
 
 ----------------------------------------------------------------------
+Machine:x86_64           Processor:  Intel 11th Gen Core i7-1165G7
+Memory: 90.34%           # of procs: 4
+L1 iCache:32 KB          # used:1
+NMAX: 8192               Clock: 2.80GHz
+OS:Linux                 Timer:Wall, gettimeofday()
+L2 Cache:1280 KB         Node name: DESKTOP-NMTUG6U
+Language:C               Version:9.4.0
+Compiler:gcc             Run by:naveens
+Options:-O2 -DSUN4       Date:26/02/2023 (dd/mm) 23:12:45
+
+M ops:    71023.1              Time:       29.329 seconds
+n:        4217                 MFLOPS:     2421.6
+Approximate data memory use: 142771552 bytes.
+----------------------------------------------------------------------
 
 ```
