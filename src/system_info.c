@@ -87,7 +87,7 @@ int system_info (MachineInfo *p_info)
     printf("L1 iCache:%d KB\t\t # used:1\n", p_info->l1i_cache);
     printf("NMAX:%5d \t\t Clock:%5.2fGHz\n",p_info->nmax, p_info->clock_speed);
     printf("OS:%s\t\t Timer:Wall, gettimeofday()\n",p_info->os_string);
-    printf("L2 Cache:%d KB\t Node name: %s\n",p_info->l2_cache, p_info->node_name);
+    printf("L2 Cache:%d KB\t\t Node: %s\n",p_info->l2_cache, p_info->node_name);
     printf("Language:C\t\t Version:%s\n",p_info->version);
     printf("Compiler:%s\t\t Run by:%s\n",p_info->compiler, p_info->user_name);
     printf("Options:-O2 -DSUN4\t Date:%s\n",p_info->datetime);
