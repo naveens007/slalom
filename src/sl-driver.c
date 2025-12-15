@@ -134,7 +134,7 @@ int main(int argc, char **argv)
     else if (set_upper_bound(Params.goal, Params.u_bound) != 0)
         return r_code;
     else
-        return (slalom_main_loop(Params.goal, Params.l_bound, Params.u_bound));
+        return (slalom_main_loop(Params.goal, Params.l_bound, Params.u_bound) != TRUE);
 }
 
 int help_message()
