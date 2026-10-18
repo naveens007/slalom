@@ -3,16 +3,25 @@
 #ifndef __SYSINFO_H_INCLUDE__
 #define __SYSINFO_H_INCLUDE__
 
+/* This header is also included from the C++ implementation (src/cpp). */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BUFFER_SIZE 64
 
 typedef struct
 {
     /* Hostname                */
     const char *node_name;
-#ifdef NMAX
-    /* Specific NMAX value for SLALOM benchmark. */
+    /* Specific NMAX value for SLALOM benchmark.
+
+       Declared unconditionally: wrapping this field in #ifdef NMAX made the
+       struct layout depend on whether the including translation unit happened
+       to include slalom.h first (112 bytes with NMAX, 104 without), so a
+       second implementation that did not see NMAX read every field at the
+       wrong offset. Fields must never come and go with a preprocessor macro. */
     int        nmax;
-#endif
     /* Operating System Type    */
     const char *os_string;
     /* Processor Architecture   */
@@ -44,5 +53,9 @@ typedef struct
 /* Interface Functions.              */
 MachineInfo * get_system_info ();
 int system_info (MachineInfo *p_info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

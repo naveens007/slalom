@@ -19,6 +19,23 @@ $ make -C /path/to/build_directory
 ```
 The binary named slalom will be built at /path/to/build_directory/bin
 
+### Optional: the C++ implementation (scaffold)
+
+`src/slalom.c` is the frozen reference implementation — it is what produces
+the published numbers and it is not being refactored. A C++ port lives in
+`src/cpp/` and is **off by default**, so a normal build produces exactly the
+same binaries as before:
+
+```
+$ cmake -S /path/to/source -B /path/to/build_directory -DSLALOM_ENABLE_CXX=ON
+$ make -C /path/to/build_directory
+```
+
+This additionally builds `slalom-cxx` next to `slalom`. At this stage
+`slalom-cxx` only verifies the build plumbing (RAII file handling, linkage
+against the shared C machine-report code) and deliberately prints **no
+benchmark result** — the solver phases are not ported yet.
+
 ## Running the Benchmark
 
 ``` $ ./slalom  -t 10 -l 400 -u 4000```
