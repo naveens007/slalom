@@ -6,15 +6,18 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Both compilers are built and run inside ONE job so they execute on the same
+  # runner (same CPU, same cache, same load). A matrix would schedule gcc and
+  # clang on different machines and make the MFLOPS numbers incomparable.
   build-and-run:
-    name: build & run (${{ matrix.compiler }})
+    name: build & run (gcc + clang, same runner)
     # Pinned instead of ubuntu-latest so the toolchain/image does not change
     # underneath us (ubuntu-latest migrates to Ubuntu 26 on 2026-10-19).
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler: [ gcc, clang ]
+    env:
+      # Identical benchmark parameters for both compilers.
+      SLALOM_ARGS: "-t 10 -l 400 -u 4000"
+      COMPILERS: "gcc clang"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,25 +28,48 @@ jobs:
           # Optional at build time, but gives the benchmark a richer machine report.
           sudo apt-get install -y libcpuinfo-dev
 
-      - name: Configure
-        run: >
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=${{ matrix.compiler }}
-          -DSLALOM_SUN4_DDOT=ON
-
-      - name: Build
-        run: cmake --build build -j "$(nproc)"
-
-      - name: Install
-        run: cmake --install build
-
-      - name: Run benchmark
+      - name: Build (all compilers)
         run: |
-          ./build/install/bin/slalom -t 10 -l 400 -u 4000 | tee "slalom-${{ matrix.compiler }}.log"
+          for cc in $COMPILERS; do
+            echo "::group::configure + build ($cc)"
+            cmake -S . -B "build-$cc" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_C_COMPILER="$cc" \
+              -DSLALOM_SUN4_DDOT=ON
+            cmake --build "build-$cc" -j "$(nproc)"
+            cmake --install "build-$cc"
+            echo "::endgroup::"
+          done
+
+      - name: Run benchmark (same runner, back to back)
+        run: |
+          for cc in $COMPILERS; do
+            echo "::group::slalom ($cc)"
+            ./build-$cc/install/bin/slalom $SLALOM_ARGS | tee "slalom-$cc.log"
+            echo "::endgroup::"
+          done
+
+      - name: Summarise
+        run: |
+          cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)
+          {
+            echo "### SLALOM results"
+            echo
+            echo "Runner: \`$cpu\`, $(nproc) vCPUs — gcc and clang measured on the same machine."
+            echo
+            echo "Arguments: \`$SLALOM_ARGS\` (Release, SUN4/unrolled DDot)"
+            echo
+            echo "| compiler | n | MFLOPS |"
+            echo "|---|---:|---:|"
+            for cc in $COMPILERS; do
+              n=$(awk '/^n:/{print $2}' "slalom-$cc.log")
+              m=$(awk '/^n:/{print $NF}' "slalom-$cc.log")
+              echo "| $cc | $n | $m |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark output
         uses: actions/upload-artifact@v4
         with:
-          name: slalom-results-${{ matrix.compiler }}
-          path: slalom-${{ matrix.compiler }}.log
+          name: slalom-results
+          path: slalom-*.log
