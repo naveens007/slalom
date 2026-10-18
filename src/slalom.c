@@ -296,7 +296,10 @@ int Reader(double box[],      /* Out: Dimensions of box in x, y, z directions.  
         {
             n += fscanf(infile, "%lg", &box[i]);
         }
-    fgets(buff, 80, infile); /* Eat the rest of the line. */
+    if (fgets(buff, 80, infile) == NULL)
+        {
+            /* No trailing comment on this line; nothing to discard. */
+        }
     if (n != 3)
         {
             printf("Must specify exactly 3 box coordinates.\n");
@@ -312,7 +315,10 @@ int Reader(double box[],      /* Out: Dimensions of box in x, y, z directions.  
                     n += fscanf(infile, "%lg", &rho[i][j]);
                 }
         }
-    fgets(buff, 80, infile); /* Eat the rest of the line. */
+    if (fgets(buff, 80, infile) == NULL)
+        {
+            /* No trailing comment on this line; nothing to discard. */
+        }
     if (n != 18)
         {
             printf("Must specify exactly 18 box coordinates.\n");
@@ -328,7 +334,10 @@ int Reader(double box[],      /* Out: Dimensions of box in x, y, z directions.  
                     n += fscanf(infile, "%lg", &emiss[i][j]);
                 }
         }
-    fgets(buff, 80, infile); /* Eat the rest of the line. */
+    if (fgets(buff, 80, infile) == NULL)
+        {
+            /* No trailing comment on this line; nothing to discard. */
+        }
     if (n != 18)
         {
             printf("Must specify exactly 18 box coordinates.\n");

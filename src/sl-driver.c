@@ -162,8 +162,14 @@ int errmsg(const char *msg)
 const char *get_path_name ()
 {
     static char pathname[BUFSIZ] = {0};
-    /* Check where is the binary running. Linux Specific. */
-    readlink("/proc/self/exe", pathname, BUFSIZ);
+    /* Check where is the binary running. Linux Specific.
+     * readlink() does not NUL terminate, so reserve one byte and terminate
+     * explicitly (it may also fail, e.g. if /proc is not mounted). */
+    ssize_t len = readlink("/proc/self/exe", pathname, sizeof(pathname) - 1);
+    if (len < 0)
+        pathname[0] = '\0';
+    else
+        pathname[len] = '\0';
 
     /* since we are returning static memory, no no need to worry
      * about the memory allocation by the caller.. */
