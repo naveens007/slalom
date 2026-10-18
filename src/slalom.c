@@ -207,7 +207,7 @@ int Meter(int npatch, double *timing, double *work)
     non0 = loop[1][0];
     Solver(npatch, non0, coeff, diag, rhs, result);
     sec[6] = When();
-    Storer(npatch, loop, place, size, result);
+    Storer(npatch, loop, result, place, size);
     sec[7] = When();
     *timing = sec[7] - sec[0];
     for (i = 0; i < 7; i++)

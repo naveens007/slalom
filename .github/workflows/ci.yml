@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-run:
+    name: build & run (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ gcc, clang ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # Optional at build time, but gives the benchmark a richer machine report.
+          sudo apt-get install -y libcpuinfo-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=${{ matrix.compiler }}
+          -DSLALOM_SUN4_DDOT=ON
+
+      - name: Build
+        run: cmake --build build -j "$(nproc)"
+
+      - name: Install
+        run: cmake --install build
+
+      - name: Run benchmark
+        run: |
+          ./build/install/bin/slalom -t 10 -l 400 -u 4000 | tee "slalom-${{ matrix.compiler }}.log"
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: slalom-results-${{ matrix.compiler }}
+          path: slalom-${{ matrix.compiler }}.log
