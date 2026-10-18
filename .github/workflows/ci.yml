@@ -41,6 +41,19 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Build (C++ implementation, opt-in)
+        run: |
+          echo "::group::configure + build (C++)"
+          cmake -S . -B build-cxx \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DSLALOM_SUN4_DDOT=ON \
+            -DSLALOM_ENABLE_CXX=ON
+          cmake --build build-cxx -j "$(nproc)"
+          cmake --install build-cxx
+          echo "::endgroup::"
+
       - name: Run benchmark (same runner, back to back)
         run: |
           for cc in $COMPILERS; do
@@ -48,6 +61,9 @@ jobs:
             ./build-$cc/install/bin/slalom $SLALOM_ARGS | tee "slalom-$cc.log"
             echo "::endgroup::"
           done
+          echo "::group::slalom-cxx (C++ scaffold)"
+          ./build-cxx/install/bin/slalom-cxx | tee "slalom-cxx.log"
+          echo "::endgroup::"
 
       - name: Summarise
         run: |
@@ -59,13 +75,14 @@ jobs:
             echo
             echo "Arguments: \`$SLALOM_ARGS\` (Release, SUN4/unrolled DDot)"
             echo
-            echo "| compiler | n | MFLOPS |"
+            echo "| implementation | n | MFLOPS |"
             echo "|---|---:|---:|"
             for cc in $COMPILERS; do
               n=$(awk '/^n:/{print $2}' "slalom-$cc.log")
               m=$(awk '/^n:/{print $NF}' "slalom-$cc.log")
-              echo "| $cc | $n | $m |"
+              echo "| $cc, C reference | $n | $m |"
             done
+            echo "| g++, C++ scaffold | not ported yet | - |"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark output

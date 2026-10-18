@@ -40,3 +40,9 @@ install(FILES geom
         DESTINATION bin
         PERMISSIONS OWNER_READ GROUP_READ WORLD_READ
 )
+
+# Experimental C++ implementation. Opt-in; see SLALOM_ENABLE_CXX in the
+# top-level CMakeLists.txt.
+if(SLALOM_ENABLE_CXX)
+	add_subdirectory(cpp)
+endif()
