@@ -370,7 +370,6 @@ static const char *vendor_name (enum cpuinfo_vendor vendor)
         case cpuinfo_vendor_ibm:              return "IBM";
         case cpuinfo_vendor_hygon:            return "Hygon";
         case cpuinfo_vendor_apm:              return "Ampere/APM";
-        case cpuinfo_vendor_sifive:           return "SiFive";
         case cpuinfo_vendor_texas_instruments:return "Texas Instruments";
         case cpuinfo_vendor_mips:             return "MIPS";
         default:                              return NULL;
