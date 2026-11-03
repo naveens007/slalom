@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.5)
-project(slalom LANGUAGES C)
+project(slalom LANGUAGES C CXX)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Installation directory" FORCE)
@@ -30,6 +30,14 @@ option(SLALOM_SUN4_DDOT "Use the unrolled (SUN4) DDot" OFF)
 # Detect processor details with libcpuinfo. When unavailable the benchmark
 # falls back to reading /proc/cpuinfo, so a missing library is not fatal.
 option(SLALOM_USE_CPUINFO "Use libcpuinfo for processor detection" ON)
+
+# Build the experimental C++ implementation (target: slalom-cxx).
+#
+# OFF by default on purpose: src/slalom.c is the frozen reference benchmark
+# whose numbers are published, so the default build must keep producing
+# exactly the same binaries. Enable it explicitly to build the C++ version
+# alongside the C one.
+option(SLALOM_ENABLE_CXX "Build the C++ implementation (target slalom-cxx)" OFF)
 
 # ---------------------------------------------------------------------------
 # Dependencies

@@ -55,6 +55,10 @@ MachineInfo *get_system_info ()
     machine_info.arch = get_build ();
 #ifdef NMAX
     machine_info.nmax = NMAX;
+#else
+    /* nmax is a plain struct field now (see system_info.h), so it has to be
+     * given a value even in a translation unit that does not see NMAX. */
+    machine_info.nmax = 0;
 #endif
     machine_info.os_string = determine_os ();
     machine_info.compiler = determine_compiler ();
