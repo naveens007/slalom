@@ -171,7 +171,7 @@ void SetUp1(int n, const Regions &r, Matrix &a) {
         }
         double t2 = 0;
         for (int j = 0; j < 2; j++)
-          for (int m = 0; m < 2; m++)
+          for (int m = 0; m < 2; m++) {
             for (int i = 0; i < 2; i++) {
               double t3 = d2[m][i][1 - j] + plane, t4 = std::sqrt(t3),
                      t5 = 1.0 / t4, t8 = 0;
@@ -186,6 +186,8 @@ void SetUp1(int n, const Regions &r, Matrix &a) {
               }
               t2 = -4.0 * t4 * t8 - t2;
             }
+            t2 = -t2;
+          }
         a(p, q) = a(q, p) = t2;
       }
   }
@@ -213,7 +215,7 @@ void SetUp2(int n, const Regions &r, Matrix &a) {
           for (int i = 0; i < 2; i++)
             y[i][1] += 1e-35;
           double t2 = 0;
-          for (int i = 0; i < 2; i++)
+          for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {
               double t3 = y[i][0] + y[j][1], t4 = std::sqrt(t3), t5 = 1.0 / t4,
                      t8 = 0;
@@ -228,6 +230,8 @@ void SetUp2(int n, const Regions &r, Matrix &a) {
               }
               t2 = -4.0 * t4 * t8 - t2;
             }
+            t2 = -t2;
+          }
           a(p, q) = a(q, p) = std::fabs(t2);
         }
     }
