@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, cpp-implementation ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -61,8 +62,8 @@ jobs:
             ./build-$cc/install/bin/slalom $SLALOM_ARGS | tee "slalom-$cc.log"
             echo "::endgroup::"
           done
-          echo "::group::slalom-cxx (C++ scaffold)"
-          ./build-cxx/install/bin/slalom-cxx | tee "slalom-cxx.log"
+          echo "::group::slalom-cxx (C++ port)"
+          ./build-cxx/install/bin/slalom-cxx $SLALOM_ARGS | tee "slalom-cxx.log"
           echo "::endgroup::"
 
       - name: Summarise
@@ -82,7 +83,9 @@ jobs:
               m=$(awk '/^n:/{print $NF}' "slalom-$cc.log")
               echo "| $cc, C reference | $n | $m |"
             done
-            echo "| g++, C++ scaffold | not ported yet | - |"
+            n=$(awk '/^n:/{print $2}' "slalom-cxx.log")
+            m=$(awk '/^n:/{print $NF}' "slalom-cxx.log")
+            echo "| g++, C++ port | $n | $m |"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark output
