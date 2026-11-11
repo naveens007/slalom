@@ -153,20 +153,20 @@
 #define __SLALOM_H__
 
 /* NMAX = Largest npatch for your computer; adjust as needed. */
-#define		NMAX	8192
-#define		EPS		(0.5e-8)
-#define		FALSE	(1==0)
-#define		TRUE	(!FALSE)
-#define		MAX(a,b)	(((a) > (b)) ? (a) : (b))
-
+#define NMAX 8192
+#define EPS (0.5e-8)
+#define FALSE (1 == 0)
+#define TRUE (!FALSE)
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 /* Driver for following benchmark functions.          */
 int slalom_main_loop(
-    double goal,        /* User input, fixed-time benchmark goal, in seconds.           */
-    int lower_bound, /* lower bound to start bisection.                              */
-    int upper_bound  /* Upper bound on problem size, used in iterating toward goal.  */
+    double goal,     /* User input, fixed-time benchmark goal, in seconds.     */
+    int lower_bound, /* lower bound to start bisection. */
+    int upper_bound  /* Upper bound on problem size, used in iterating toward
+                        goal.  */
 );
-int Meter (int npatch, double * timing, double *work);
+int Meter(int npatch, double *timing, double *work);
 
 /* Wrapper for std fopen to consider absolute path where binary resides. */
 FILE *fopen_p(const char *pathname, const char *mode);
