@@ -121,6 +121,55 @@ by the reference. A quick run is:
 $ java -cp src/java Slalom -t 1 -l 50 -u 300
 ```
 
+### Optional: the TypeScript implementation
+
+`src/ts/Slalom.ts` is a pure-TypeScript port of `src/slalom.c`. It follows
+the reference implementation: the same `geom` input, the same
+`Reader → Region → SetUp1/2/3 → Solver → Storer` phases, the same analytic
+operation counts, the same fixed-time bisection search, the same console
+report format, and the same `answer` file format. Because JavaScript has no
+`printf`, the C conversions used by the benchmark output are re-implemented
+internally (`toFixed` keeps trailing zeros and there is no `%g`, so the
+numbers would not otherwise print exactly as the C reference prints them).
+
+It is not built by CMake; compile it with any TypeScript compiler. The
+in-tree way (requires `npm install --save-dev typescript @types/node` once):
+
+```
+$ npx tsc -p src/ts
+$ node src/ts/Slalom.js -t 10 -l 50 -u 700
+```
+
+The compiled `Slalom.js` sits next to `Slalom.ts`, so `geom` is found in
+`src/geom` (the benchmark looks for it next to the compiled file, falling
+back to the parent directory, as the C binary reads it from its own
+directory), and `answer` is written to the current working directory,
+matching the C convention. Compiled JavaScript can also be run anywhere the
+`geom` file is copied next to it. Runtimes that execute TypeScript directly
+work too, e.g. `bun src/ts/Slalom.ts -t 10 -l 50 -u 700` or
+`deno run --allow-read --allow-write src/ts/Slalom.ts -t 10 -l 50 -u 700`.
+
+V8-compiled JavaScript runs within a small factor of the C reference, so
+`NMAX` keeps the C value `8192` (override with the `SLALOM_NMAX`
+environment variable). At `n = 8192` the `n x n` coefficient matrix needs
+about 0.5 GB of heap; if Node's default old-space limit is smaller, raise
+it with `node --max-old-space-size=4096 src/ts/Slalom.js`. The timer is the
+wall-clock `process.hrtime.bigint()`, and the machine report block
+(Language: TypeScript, Compiler: tsc, Timer: Wall,
+process.hrtime.bigint()) follows the layout of the C `system_info()`
+output.
+
+For a fixed `n` the port is numerically faithful: it reproduces the C
+operation counts exactly and writes a byte-identical `answer` file (verified
+at `n = 120`, `234`, `726` and `1000`). At larger sizes a single value may
+rarely differ in its last decimal digit: V8's `Math.log`/`Math.atan` are
+accurate to within 1 ulp but not always bit-identical to the C library used
+by the reference. A quick run is:
+
+```
+$ node src/ts/Slalom.js -t 1 -l 50 -u 300
+```
+
 ## How SLALOM Measures Performance
 
 ### The problem it solves: radiosity inside a box

@@ -4,3 +4,4 @@
 __pycache__/
 *.pyc
 *.class
+src/ts/*.js
