@@ -39,12 +39,23 @@ option(SLALOM_USE_CPUINFO "Use libcpuinfo for processor detection" ON)
 # alongside the C one.
 option(SLALOM_ENABLE_CXX "Build the C++ implementation (target slalom-cxx)" OFF)
 
+# Build the Java implementation (target: slalom-java, compiled with javac).
+#
+# OFF by default for the same reason as the C++ implementation: the default
+# build must keep producing exactly the same binaries. Requires a JDK (javac).
+option(SLALOM_ENABLE_JAVA "Build the Java implementation (target slalom-java)" OFF)
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
 find_library(MATH_LIBRARY m)
 if(NOT MATH_LIBRARY)
   message(FATAL_ERROR "Math library not found")
+endif()
+
+if(SLALOM_ENABLE_JAVA)
+  find_package(Java 1.8 REQUIRED COMPONENTS Development)
+  message(STATUS "Java compiler: ${Java_JAVAC_EXECUTABLE}")
 endif()
 
 set(SLALOM_HAVE_CPUINFO OFF)

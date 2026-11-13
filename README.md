@@ -66,6 +66,61 @@ operation counts exactly and writes an identical `answer` file (verified at
 $ python3 src/slalom.py -t 1 -l 20 -u 300
 ```
 
+### Optional: the Java implementation
+
+`src/java/Slalom.java` is a pure-Java (JDK 8+) port of `src/slalom.c`. It
+follows the reference implementation: the same `geom` input, the same
+`Reader → Region → SetUp1/2/3 → Solver → Storer` phases, the same analytic
+operation counts, the same fixed-time bisection search, the same console
+report format, and the same `answer` file format. The C-compatible `%g`
+formatting is re-implemented internally so the numbers print exactly as the
+C reference prints them (java's built-in `%g` keeps trailing zeros, C's does
+not).
+
+Like the C++ version it is **off by default**, so a normal build produces
+exactly the same binaries as before:
+
+```
+$ cmake -S /path/to/source -B /path/to/build_directory -DSLALOM_ENABLE_JAVA=ON
+$ make -C /path/to/build_directory
+$ java -cp /path/to/build_directory/src/java/classes Slalom -t 10 -l 50 -u 700
+```
+
+The `slalom-java` target compiles the class files with `javac` and places
+`geom` next to them (the benchmark reads `geom` from its own directory, as
+the C binary does); `cmake --install` installs them together under
+`bin/slalom-java`.
+
+It can also be built and run without CMake, using only a JDK:
+
+```
+$ javac src/java/Slalom.java && java -cp src/java Slalom -t 10 -l 50 -u 700
+```
+
+In this in-tree layout `geom` is found in `src/geom` (the benchmark falls
+back to the parent directory of the class files), and `answer` is written to
+the current working directory, matching the C convention.
+
+The JIT-compiled Java code runs within a small factor of the C reference, so
+`NMAX` keeps the C value `8192` (override with the `SLALOM_NMAX` environment
+variable). At `n = 8192` the `n x n` coefficient matrix needs about 0.5 GB of
+heap; pass `-Xmx` if the JVM's default heap is smaller, e.g.
+`java -Xmx2g -cp ... Slalom`. The timer is the wall-clock
+`System.nanoTime()`, and the machine report block (Language: Java,
+Compiler: javac, Timer: Wall, System.nanoTime()) follows the layout of the C
+`system_info()` output.
+
+For a fixed `n` the port is numerically faithful: it reproduces the C
+operation counts exactly and writes a byte-identical `answer` file (verified
+at `n = 120`, `234`, `726` and `1000`). At larger sizes a single value may
+rarely differ in its last decimal digit: Java's `Math.log`/`Math.atan` are
+accurate to within 1 ulp but not always bit-identical to the C library used
+by the reference. A quick run is:
+
+```
+$ java -cp src/java Slalom -t 1 -l 50 -u 300
+```
+
 ## How SLALOM Measures Performance
 
 ### The problem it solves: radiosity inside a box

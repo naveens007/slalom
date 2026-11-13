@@ -3,3 +3,4 @@
 /install/
 __pycache__/
 *.pyc
+*.class

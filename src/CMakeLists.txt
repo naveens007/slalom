@@ -46,3 +46,9 @@ install(FILES geom
 if(SLALOM_ENABLE_CXX)
 	add_subdirectory(cpp)
 endif()
+
+# Optional Java implementation (src/java/Slalom.java). Opt-in; see
+# SLALOM_ENABLE_JAVA in the top-level CMakeLists.txt.
+if(SLALOM_ENABLE_JAVA)
+	add_subdirectory(java)
+endif()

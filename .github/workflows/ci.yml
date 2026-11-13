@@ -10,7 +10,7 @@ jobs:
   # runner (same CPU, same cache, same load). A matrix would schedule gcc and
   # clang on different machines and make the MFLOPS numbers incomparable.
   build-and-run:
-    name: build & run (gcc + clang, same runner)
+    name: build & run (gcc + clang + Java, same runner)
     # Pinned instead of ubuntu-latest so the toolchain/image does not change
     # underneath us (ubuntu-latest migrates to Ubuntu 26 on 2026-10-19).
     runs-on: ubuntu-24.04
@@ -18,9 +18,21 @@ jobs:
       # Identical benchmark parameters for both compilers.
       SLALOM_ARGS: "-t 10 -l 400 -u 4000"
       COMPILERS: "gcc clang"
+      # Java-appropriate bounds: slower bracketing runs would stretch CI for
+      # no extra information, and the JVM needs time to JIT-warm on the
+      # shared runner.
+      SLALOM_JAVA_ARGS: "-t 10 -l 100 -u 3000"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Pinned JDK so the Java numbers are reproducible across runner
+      # image updates. JDK 11 is also what the Java port was verified with.
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
 
       - name: Install dependencies
         run: |
@@ -54,6 +66,16 @@ jobs:
           cmake --install build-cxx
           echo "::endgroup::"
 
+      - name: Build (Java implementation, opt-in)
+        run: |
+          echo "::group::configure + build (Java)"
+          cmake -S . -B build-java \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSLALOM_ENABLE_JAVA=ON
+          cmake --build build-java -j "$(nproc)"
+          cmake --install build-java
+          echo "::endgroup::"
+
       - name: Run benchmark (same runner, back to back)
         run: |
           for cc in $COMPILERS; do
@@ -64,6 +86,10 @@ jobs:
           echo "::group::slalom-cxx (C++ scaffold)"
           ./build-cxx/install/bin/slalom-cxx | tee "slalom-cxx.log"
           echo "::endgroup::"
+          echo "::group::slalom (Java)"
+          java -cp build-java/install/bin/slalom-java Slalom $SLALOM_JAVA_ARGS \
+            | tee "slalom-java.log"
+          echo "::endgroup::"
 
       - name: Summarise
         run: |
@@ -71,9 +97,9 @@ jobs:
           {
             echo "### SLALOM results"
             echo
-            echo "Runner: \`$cpu\`, $(nproc) vCPUs — gcc and clang measured on the same machine."
+            echo "Runner: \`$cpu\`, $(nproc) vCPUs — gcc, clang and Java measured on the same machine."
             echo
-            echo "Arguments: \`$SLALOM_ARGS\` (Release, SUN4/unrolled DDot)"
+            echo "Arguments: \`$SLALOM_ARGS\` (Release, SUN4/unrolled DDot); Java: \`$SLALOM_JAVA_ARGS\`."
             echo
             echo "| implementation | n | MFLOPS |"
             echo "|---|---:|---:|"
@@ -83,6 +109,9 @@ jobs:
               echo "| $cc, C reference | $n | $m |"
             done
             echo "| g++, C++ scaffold | not ported yet | - |"
+            n=$(awk '/^n:/{print $2}' "slalom-java.log")
+            m=$(awk '/^n:/{print $NF}' "slalom-java.log")
+            echo "| Java (javac, JDK 11) | $n | $m |"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark output
