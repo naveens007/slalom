@@ -251,6 +251,147 @@ machine's memory/cache behaviour as well as its raw floating-point rate —
 which is also why the unrolled `DDot()` option (`SLALOM_SUN4_DDOT`) can
 change the Solver share measurably.
 
+### Changing the `geom` file
+
+`geom` is the benchmark's problem definition, not a neutral configuration
+file. `Meter()` re-reads it on every candidate run, so changing it changes
+the matrix being solved, the amount of work counted, the numerical
+conditioning, and often the problem size `n` selected by the fixed-time
+search.
+
+#### Format and validation
+
+`Reader()` expects exactly 39 numbers:
+
+```
+line 1       x y z                          box dimensions
+next 3 lines reflectivities, 6 faces each   line 1 = R, line 2 = G, line 3 = B
+next 3 lines emissivities,   6 faces each   same R/G/B grouping
+```
+
+The data is colour-major: each line holds the six face values for one colour
+channel. The checks are:
+
+* each box dimension must satisfy `1.0 <= dimension < 100.0`;
+* each reflectivity must satisfy `0.0 <= rho <= 0.999`;
+* each emissivity must be `>= 0`, and every colour channel needs at least
+  one non-zero emissivity (otherwise the run aborts with “Problem is
+  trivial”);
+* missing or extra values, non-numeric text, or a missing `geom` file abort
+  the run before a performance number is produced.
+
+Comments are only safely ignored at the end of the box line, the third
+reflectivity line, and the third emissivity line: `Reader()` discards the
+remainder of those specific lines, so a comment in the middle of a group
+breaks the following `fscanf()` calls.
+
+#### Box dimensions change the patch layout and the work count
+
+`n` remains the search variable, but `Region()` distributes the `n` patches
+across the six faces **in proportion to face area**:
+
+```
+p_i  proportional to  area of face i,        sum(p_i) = n
+```
+
+The operation-count formulas in `Meter()` use those `p_i` values and the box
+aspect ratios, so at the same `n` different box shapes are not the same
+amount of work. Reproducing the `Region()` allocation and `Meter()` formulas
+at `n = 1000` gives:
+
+| box (x×y×z) | patches per face `p0…p5` | total M ops | SetUp1 | SetUp2 | Solver |
+|---|---:|---:|---:|---:|---:|
+| default `13.5×9×8` | 201,120,179,201,120,179 | 1116.9 | 72.9 | 140.3 | 902.7 |
+| cube `10×10×10` | 167,166,167,167,166,167 | 1147.6 | 70.0 | 143.3 | 933.4 |
+| long `20×5×5` | 222,56,222,222,56,222 | 1095.5 | 85.4 | 127.5 | 881.7 |
+| flat `20×20×2` | 417,41,42,417,41,42 | 842.4 | 149.0 | 62.5 | 630.3 |
+| rotated flat `2×20×20` | 42,416,42,42,416,42 | 1214.6 | 148.3 | 63.1 | 1002.5 |
+
+These are operation-count model values, not measured wall-clock times; the
+total includes all phases, so `SetUp1 + SetUp2 + Solver` is less than the
+total.
+
+A flat box has large opposite faces, so the O(n²) parallel-face form-factor
+work in `SetUp1` grows while the orthogonal-face work in `SetUp2` shrinks.
+
+The benchmark is also **not rotation-invariant**. After `SetUp3`, all
+same-face coefficients are zero. `Solver()` exploits this only for the
+first face: `non0 = loop[1][0] = p0`, and rows `0 … p0-1` are treated as a
+diagonal block. A larger face 0 therefore reduces the solver work, while a
+smaller face 0 increases it. That is why `20×20×2` and `2×20×20` are the
+same shape but have very different counted work (842M versus 1215M total;
+630M versus 1003M in `Solver`).
+
+Very eccentric boxes can fail outright. For a `1×1×99` box, the `1×1` faces
+receive zero patches for `n` below roughly 200, and `Region()` aborts when
+it cannot form a non-empty row distribution. Extreme aspect ratios are
+therefore not a safe way to “make the benchmark harder.”
+
+Uniformly scaling a box while keeping its ratios — for example `13.5×9×8` to
+`27×18×16`, as long as every dimension stays below 100 — leaves `p_i` and
+the operation counts essentially unchanged. The absolute size affects the
+floating-point values, but not the amount of work.
+
+#### Reflectivity and emissivity affect conditioning, not work counts
+
+The `Meter()` operation formulas do not use `rho` or `emiss`. At a fixed
+`n`, changing them does not change the reported `M ops`, the matrix size, or
+the approximate memory use. They change the values inside the matrix and
+right-hand side:
+
+```
+diag[j][i] = (1 / rho[face][j]) * area[i]
+rhs[j][i]  = (emiss[face][j] / rho[face][j]) * area[i]
+```
+
+* A reflectivity near `0.999` makes the system only barely diagonally
+  dominant, so conditioning worsens. The direct LDLᵀ solve performs the same
+  arithmetic, but the solution can lose accuracy; `Verify()` checks the
+  residual, not the solution error.
+* `rho = 0.0` passes the range check, but `SetUp3()` divides by `rho`. That
+  produces `inf`/`NaN`, making the run meaningless; use a small positive
+  value instead.
+* Emissivity only scales the right-hand side and the solution. Scaling all
+  emissivities up or down does not change runtime, and the residual check is
+  normalised by `xnorm`, so it is largely scale-invariant. Absurdly large
+  values could overflow, however.
+* A colour channel with all six emissivities zero is rejected. A single
+  emissive face is enough for that channel, as in the default `geom`.
+
+#### Effect on the fixed-time search and reported metrics
+
+* A `geom` that is more expensive per patch causes the bisection to select a
+  smaller `n`; a cheaper one selects a larger `n`.
+* Changing `geom` can invalidate the supplied bounds. If the new lower bound
+  takes longer than `-t`, or the new upper bound finishes faster than `-t`,
+  the driver aborts and `-l`/`-u` must be re-bracketed.
+* `MFLOPS = work / time`, and `work` is defined by formulas that depend on
+  the geometry. Runs with different `geom` files are therefore not directly
+  comparable: they are different workloads, even at the same `n`. For
+  meaningful comparisons, keep the canonical `geom` fixed and vary only
+  permitted things such as compiler flags, algorithms, or the time budget.
+* Memory use depends only on `n` (`8n² + 120n + 800` bytes), not on the
+  geometry. But the `n` chosen for a fixed time budget can change.
+
+#### Practical points
+
+* `geom` must be named exactly `geom` and is loaded from the **directory
+  containing the executable**, not the current working directory. Editing
+  `src/geom` does not affect an existing build-tree binary unless it is
+  copied next to the binary or reinstalled.
+* Every `Meter()` call re-reads the file, so do not modify it during a run;
+  the bisection assumes all candidate runs use the same problem.
+* For valid experiments: keep dimensions in `[1, 100)`, avoid extreme
+  aspect ratios, use reflectivities in `(0, 0.999]`, ensure at least one
+  positive emissivity per colour channel, and re-check the `-l`/`-u` bracket
+  after significant geometry changes.
+
+In short: changing `geom` changes the benchmark itself. It can alter
+validity, the patch distribution, the counted FLOPs, the setup-versus-solver
+balance, the conditioning of the system, and the `n` the benchmark selects.
+Published numbers are only meaningful when the same canonical `geom` is
+used.
+
 ### Correctness checks
 
 A fast but wrong answer is not a result. Two checks guard the measurement:
