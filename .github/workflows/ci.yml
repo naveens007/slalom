@@ -5,34 +5,31 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+# The three ports run in parallel, each in its own job on its own isolated
+# runner: the C/C++ job (gcc + clang), the Java job and the TypeScript job
+# do not wait for each other. The trade-off is that they no longer execute
+# on the same physical machine, so MFLOPS/n are comparable across runs of
+# the same job (same pinned runner image) but not across jobs; the summary
+# job therefore reports the runner CPU next to every result.
+
 jobs:
-  # Both compilers are built and run inside ONE job so they execute on the same
-  # runner (same CPU, same cache, same load). A matrix would schedule gcc and
-  # clang on different machines and make the MFLOPS numbers incomparable.
-  build-and-run:
-    name: build & run (gcc + clang + Java, same runner)
+  # Both C compilers are built and run inside ONE job so gcc and clang
+  # execute on the same runner (same CPU, same cache, same load) and their
+  # MFLOPS numbers stay comparable. A matrix would schedule gcc and clang
+  # on different machines and make the numbers incomparable.
+  benchmark-c:
+    name: C & C++ (gcc + clang, same runner)
     # Pinned instead of ubuntu-latest so the toolchain/image does not change
     # underneath us (ubuntu-latest migrates to Ubuntu 26 on 2026-10-19).
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       # Identical benchmark parameters for both compilers.
       SLALOM_ARGS: "-t 10 -l 400 -u 4000"
       COMPILERS: "gcc clang"
-      # Java-appropriate bounds: slower bracketing runs would stretch CI for
-      # no extra information, and the JVM needs time to JIT-warm on the
-      # shared runner.
-      SLALOM_JAVA_ARGS: "-t 10 -l 100 -u 3000"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # Pinned JDK so the Java numbers are reproducible across runner
-      # image updates. JDK 11 is also what the Java port was verified with.
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '11'
 
       - name: Install dependencies
         run: |
@@ -66,16 +63,6 @@ jobs:
           cmake --install build-cxx
           echo "::endgroup::"
 
-      - name: Build (Java implementation, opt-in)
-        run: |
-          echo "::group::configure + build (Java)"
-          cmake -S . -B build-java \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DSLALOM_ENABLE_JAVA=ON
-          cmake --build build-java -j "$(nproc)"
-          cmake --install build-java
-          echo "::endgroup::"
-
       - name: Run benchmark (same runner, back to back)
         run: |
           for cc in $COMPILERS; do
@@ -86,36 +73,141 @@ jobs:
           echo "::group::slalom-cxx (C++ scaffold)"
           ./build-cxx/install/bin/slalom-cxx | tee "slalom-cxx.log"
           echo "::endgroup::"
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: slalom-c-logs
+          path: slalom-*.log
+
+  # Java runs in its own parallel job: JDK 11 is pinned (setup-java) so the
+  # numbers are reproducible across runner image updates, and it is the
+  # version the Java port was verified with.
+  benchmark-java:
+    name: Java (JDK 11)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Java-appropriate bounds: slower bracketing runs would stretch CI for
+      # no extra information, and the JVM needs time to JIT-warm on the
+      # shared runner.
+      SLALOM_JAVA_ARGS: "-t 10 -l 100 -u 3000"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      # No libcpuinfo install here: the C targets are only configured as a
+      # side effect of the project() languages, and the benchmark result
+      # comes from the JVM, which reports its own machine information.
+      - name: Build (Java implementation, opt-in)
+        run: |
+          echo "::group::configure + build (Java)"
+          cmake -S . -B build-java \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSLALOM_ENABLE_JAVA=ON
+          cmake --build build-java -j "$(nproc)"
+          cmake --install build-java
+          echo "::endgroup::"
+
+      - name: Run benchmark
+        run: |
           echo "::group::slalom (Java)"
           java -cp build-java/install/bin/slalom-java Slalom $SLALOM_JAVA_ARGS \
             | tee "slalom-java.log"
           echo "::endgroup::"
 
-      - name: Summarise
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: slalom-java-logs
+          path: slalom-java.log
+
+  # TypeScript runs in its own parallel job. Node and the compiler are
+  # pinned: the TS port is not built by CMake, so tsc + node is all it needs.
+  benchmark-ts:
+    name: TypeScript (Node 20, tsc 5)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Same bracketing rationale as the Java job.
+      SLALOM_TS_ARGS: "-t 10 -l 100 -u 3000"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compile (tsc)
         run: |
-          cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)
-          {
-            echo "### SLALOM results"
-            echo
-            echo "Runner: \`$cpu\`, $(nproc) vCPUs — gcc, clang and Java measured on the same machine."
-            echo
-            echo "Arguments: \`$SLALOM_ARGS\` (Release, SUN4/unrolled DDot); Java: \`$SLALOM_JAVA_ARGS\`."
-            echo
-            echo "| implementation | n | MFLOPS |"
-            echo "|---|---:|---:|"
-            for cc in $COMPILERS; do
-              n=$(awk '/^n:/{print $2}' "slalom-$cc.log")
-              m=$(awk '/^n:/{print $NF}' "slalom-$cc.log")
-              echo "| $cc, C reference | $n | $m |"
-            done
-            echo "| g++, C++ scaffold | not ported yet | - |"
-            n=$(awk '/^n:/{print $2}' "slalom-java.log")
-            m=$(awk '/^n:/{print $NF}' "slalom-java.log")
-            echo "| Java (javac, JDK 11) | $n | $m |"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::group::compile (tsc)"
+          # Pinned so toolchain updates cannot silently change the numbers.
+          npm install --no-save --no-fund --no-audit typescript@5.5 @types/node@20
+          npx tsc -p src/ts
+          echo "::endgroup::"
+
+      - name: Run benchmark
+        run: |
+          echo "::group::slalom (TypeScript)"
+          node src/ts/Slalom.js $SLALOM_TS_ARGS | tee "slalom-ts.log"
+          echo "::endgroup::"
 
       - name: Upload benchmark output
         uses: actions/upload-artifact@v4
         with:
-          name: slalom-results
-          path: slalom-*.log
+          name: slalom-ts-logs
+          path: slalom-ts.log
+
+  # Aggregate the three parallel jobs into one table. The runner CPU of each
+  # port is reported next to its result because the jobs deliberately run on
+  # separate (isolated) machines.
+  summary:
+    name: aggregate results
+    needs: [ benchmark-c, benchmark-java, benchmark-ts ]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download logs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: slalom-*-logs
+          merge-multiple: true
+          path: logs
+
+      - name: Summarise
+        run: |
+          cpu_of() {
+            local v
+            v=$(grep -m1 'Processor:' "logs/$1" | sed 's/.*Processor:[[:space:]]*//')
+            echo "${v:--}"
+          }
+          {
+            echo "### SLALOM results"
+            echo
+            echo "The C/C++, Java and TypeScript ports ran in parallel on"
+            echo "separate runners, so each row is measured on its own machine"
+            echo "(reported per row). Compare a row against previous runs of"
+            echo "the same job, not against the other rows."
+            echo
+            echo "| implementation | runner CPU | n | MFLOPS |"
+            echo "|---|---|---:|---:|"
+            for cc in gcc clang; do
+              n=$(awk '/^n:/{print $2}' "logs/slalom-$cc.log")
+              m=$(awk '/^n:/{print $NF}' "logs/slalom-$cc.log")
+              echo "| $cc, C reference | $(cpu_of "slalom-$cc.log") | $n | $m |"
+            done
+            echo "| g++, C++ scaffold | $(cpu_of slalom-cxx.log) | not ported yet | - |"
+            n=$(awk '/^n:/{print $2}' logs/slalom-java.log)
+            m=$(awk '/^n:/{print $NF}' logs/slalom-java.log)
+            echo "| Java (javac, JDK 11) | $(cpu_of slalom-java.log) | $n | $m |"
+            n=$(awk '/^n:/{print $2}' logs/slalom-ts.log)
+            m=$(awk '/^n:/{print $NF}' logs/slalom-ts.log)
+            echo "| TypeScript (tsc 5, Node 20) | $(cpu_of slalom-ts.log) | $n | $m |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
