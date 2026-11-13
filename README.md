@@ -36,6 +36,36 @@ This additionally builds `slalom-cxx` next to `slalom`. At this stage
 against the shared C machine-report code) and deliberately prints **no
 benchmark result** — the solver phases are not ported yet.
 
+### Optional: the Python implementation
+
+`src/slalom.py` is a pure-Python port of `src/slalom.c`. It uses only the
+standard library and follows the reference implementation: the same `geom`
+input, the same `Reader → Region → SetUp1/2/3 → Solver → Storer` phases, the
+same analytic operation counts, the same fixed-time bisection search, and a
+similar machine report. It is not built by CMake; run it directly:
+
+```
+$ python3 src/slalom.py -t 10 -l 50 -u 700
+```
+
+`geom` is read from the script's directory (`src/geom`), and `answer` is
+written to the current working directory, matching the C convention.
+
+Because CPython is much slower than optimized C, the Python version selects
+a much smaller `n` and reports lower `MFLOPS`. That is the benchmark
+measuring the Python implementation, not a bug. Use Python-appropriate
+bounds — the C example `-l 400 -u 4000` will be impractically slow. `NMAX`
+defaults to `2048` instead of the C value `8192`; override it with the
+`SLALOM_NMAX` environment variable if needed.
+
+For a fixed `n`, the port is numerically faithful: it reproduces the C
+operation counts exactly and writes an identical `answer` file (verified at
+`n = 234`). A quick run is:
+
+```
+$ python3 src/slalom.py -t 1 -l 20 -u 300
+```
+
 ## How SLALOM Measures Performance
 
 ### The problem it solves: radiosity inside a box
