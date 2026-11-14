@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
 """SLALOM benchmark -- pure-Python port of the C reference implementation.
 
-This follows ``src/slalom.c`` closely: the same radiosity problem, the same
-seven timed phases, the same analytic FLOP counts, and the same fixed-time
+This follows ``src/slalom.c``: the same radiosity problem, the same seven
+timed phases, the same analytic FLOP counts, and the same fixed-time
 bisection search for the problem size ``n``.  It is intended for comparison
 and experimentation, not for replacing the C reference numbers: CPython is
 far slower than optimized C, so the selected ``n`` is much smaller.
+
+The port is organised around the problem domain instead of the C arrays:
+
+* ``Patch`` / ``Face`` / ``Geometry`` dataclasses describe the box and its
+  surface decomposition, and ``Geometry`` is iterable patch by patch.
+* ``RadiositySystem`` owns the linear system: form-factor assembly
+  (parallel and orthogonal faces), row normalisation, the LDL^T solve for
+  each colour channel, and the residual check.
+* Colour channels are dictionaries keyed by ``"R"``/``"G"``/``"B"`` rather
+  than parallel arrays indexed 0..2.
+* Per-phase timings are ``PhaseTiming`` objects, and the report is printed
+  by iterating over them.
 
 Use ``-t``, ``-l`` and ``-u`` as with the C binary, but choose bounds suited
 to Python, for example::
@@ -16,8 +28,8 @@ The file ``geom`` is looked up next to this script, matching the C binary's
 behaviour of reading ``geom`` from its own directory.
 """
 
-import getopt
 import getpass
+import getopt
 import math
 import os
 import platform
@@ -25,34 +37,50 @@ import re
 import socket
 import sys
 import time
-from operator import mul
+from dataclasses import dataclass, field
+from itertools import accumulate, islice
+from typing import Dict, Iterator, List, Optional, Tuple
 
 # Pure Python cannot reach the C limit in practical time.  The env var makes
 # it easy to experiment without editing the source.
 NMAX = int(os.environ.get("SLALOM_NMAX", "2048"))
 EPS = 0.5e-8
 
+# The three colour channels, in the order the benchmark reports them.
+RGB: Tuple[str, str, str] = ("R", "G", "B")
+
 TASKS = ("Reader", "Region", "SetUp1", "SetUp2", "SetUp3", "Solver", "Storer")
 
 
-def _ddot_prefix(a, b, n):
-    """Double dot product of the first ``n`` elements of two rows."""
-    if n <= 0:
-        return 0.0
-    return sum(map(mul, a[:n], b[:n]))
-
-
-def When():
+def when() -> float:
     """Wall-clock time in seconds."""
     return time.perf_counter()
 
 
-def geom_path():
+def geom_path() -> str:
     """``geom`` lives next to the executable, as in the C implementation."""
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), "geom")
 
 
-def Reader(box, rho, emiss):
+# ---------------------------------------------------------------------------
+# Problem description (the data Reader() reads and validates)
+# ---------------------------------------------------------------------------
+
+
+class GeometryError(Exception):
+    """Raised with the exact message the C reference prints on bad input."""
+
+
+@dataclass
+class Problem:
+    """The parsed ``geom`` file: box dimensions and per-face properties."""
+
+    box: List[float]                     # x, y, z, then mirrored, then x again
+    reflectivities: List[Dict[str, float]]  # per face: RGB -> rho
+    emissivities: List[Dict[str, float]]    # per face: RGB -> emissivity
+
+
+def read_problem(path: str) -> Problem:
     """Read and validate the geometry file.
 
     The C code uses ``fscanf`` plus one ``fgets`` per group.  Here the float
@@ -60,357 +88,544 @@ def Reader(box, rho, emiss):
     trailing comments used by the shipped ``geom`` file.
     """
     try:
-        with open(geom_path(), "r", encoding="utf-8", errors="replace") as f:
-            text = f.read()
+        with open(path, "r", encoding="utf-8", errors="replace") as infile:
+            text = infile.read()
     except OSError:
-        print("slalom:  'geom' geometry file not found.")
-        return False
+        raise GeometryError("slalom:  'geom' geometry file not found.")
 
     number = re.compile(r"[-+]?(?:(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?)")
     values = [float(m.group()) for m in number.finditer(text)]
     if len(values) < 39:
-        print("slalom:  'geom' does not contain the required 39 numbers.")
-        return False
+        raise GeometryError("slalom:  'geom' does not contain the required 39 numbers.")
 
-    box[0], box[1], box[2] = values[0], values[1], values[2]
-    idx = 3
-    for j in range(3):
-        for i in range(6):
-            rho[i][j] = values[idx]
-            idx += 1
-    for j in range(3):
-        for i in range(6):
-            emiss[i][j] = values[idx]
-            idx += 1
+    box = [0.0] * 7
+    box[0:3] = values[0:3]
 
+    # Colour-major, exactly as the C reference reads them: one colour
+    # channel after another, six faces per channel.  Slicing by colour keeps
+    # the triplets together instead of walking a shared cursor.
+    rho_values = [
+        [values[3 + 6 * channel + face] for channel in range(3)]
+        for face in range(6)
+    ]
+    emiss_values = [
+        [values[21 + 6 * channel + face] for channel in range(3)]
+        for face in range(6)
+    ]
+
+    # Sanity-check the values that were just read.
     for j in range(3):
         if box[j] < 1.0 or box[j] >= 100.0:
-            print("Box dimensions must be between 1 and 100.")
-            return False
+            raise GeometryError("Box dimensions must be between 1 and 100.")
         box[j + 3] = box[j]
 
-        tmp1 = 0.0
-        for i in range(6):
-            if rho[i][j] < 0.0 or rho[i][j] > 0.999:
-                print("Reflectivities must be between .000 and .999.")
-                return False
-            if emiss[i][j] < 0.0:
-                print("Emissivity cannot be negative.")
-                return False
-            if tmp1 < emiss[i][j]:
-                tmp1 = emiss[i][j]
-        if tmp1 == 0.0:
-            print("Emissivities are zero.  Problem is trivial.")
-            return False
+        max_emiss = 0.0
+        for rho, emiss in zip(
+            (rho_values[face][j] for face in range(6)),
+            (emiss_values[face][j] for face in range(6)),
+        ):
+            if rho < 0.000 or rho > 0.999:
+                raise GeometryError("Reflectivities must be between .000 and .999.")
+            if emiss < 0.0:
+                raise GeometryError("Emissivity cannot be negative.")
+            max_emiss = max(max_emiss, emiss)
+        if max_emiss == 0.0:
+            raise GeometryError("Emissivities are zero.  Problem is trivial.")
 
     box[6] = box[3]
-    return True
+    return Problem(
+        box=box,
+        reflectivities=[
+            {c: rho_values[i][j] for j, c in enumerate(RGB)} for i in range(6)
+        ],
+        emissivities=[
+            {c: emiss_values[i][j] for j, c in enumerate(RGB)} for i in range(6)
+        ],
+    )
 
 
-def Region(npatch, box):
+# ---------------------------------------------------------------------------
+# Surface decomposition (the data Region() builds)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Patch:
+    """One surface element of the box."""
+
+    index: int                       # global patch number, 0-based
+    place: Tuple[float, float, float]  # position in width, height, depth
+    width: float
+    height: float
+    area: float                      # 8 * pi * area
+
+    def extent(self, axis: int) -> float:
+        """Extent along axis 0 (width) or 1 (height)."""
+        return self.width if axis == 0 else self.height
+
+
+@dataclass
+class Face:
+    """One face of the box and the patches it was subdivided into."""
+
+    index: int
+    first_patch: int                  # inclusive global patch index
+    last_patch: int                   # inclusive global patch index
+    reflectivity: Dict[str, float]    # RGB -> rho
+    emissivity: Dict[str, float]      # RGB -> emissivity
+    patches: List[Patch] = field(default_factory=list)
+
+    @property
+    def patch_count(self) -> int:
+        return self.last_patch - self.first_patch + 1
+
+    def __iter__(self) -> Iterator[Patch]:
+        return iter(self.patches)
+
+
+@dataclass
+class Geometry:
+    """The box decomposed into nearly-square patches."""
+
+    box: List[float]
+    faces: List[Face]
+
+    @property
+    def patch_count(self) -> int:
+        return self.faces[-1].last_patch + 1
+
+    def __iter__(self) -> Iterator[Patch]:
+        """Iterate over every patch, in global patch order."""
+        for face in self.faces:
+            yield from face
+
+    @property
+    def first_non_coplanar(self) -> int:
+        """Index of the first patch not on face 0 (the solver's ``non0``)."""
+        return self.faces[1].first_patch
+
+
+def decompose(npatch: int, problem: Problem) -> Optional[Geometry]:
     """Decompose the six faces into ``npatch`` nearly-square patches."""
-    loop = [[0, 0] for _ in range(6)]
-    place = [[0.0] * npatch for _ in range(3)]
-    size = [[0.0] * npatch for _ in range(2)]
-    area = [0.0] * npatch
+    box = problem.box
 
-    tmp1 = 2.0 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0])
-    tmp2 = 0.0
-    tmp3 = float(npatch)
-    loop[0][0] = 0
-    for iface in range(5):
-        tmp2 += box[iface] * box[iface + 1]
-        loop[iface][1] = int(tmp3 * tmp2 / tmp1 + 0.5) - 1
-        loop[iface + 1][0] = loop[iface][1] + 1
-    loop[5][1] = npatch - 1
+    # Allocate patches to each face, proportionate to area of each face.
+    total_area = 2.0 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0])
+    budget = float(npatch)
+    covered = list(accumulate(box[iface] * box[iface + 1] for iface in range(5)))
+    last_patch = [int(budget * area / total_area + 0.5) - 1 for area in covered]
+    last_patch.append(npatch - 1)
+    first_patch = [0] + [last + 1 for last in last_patch[:-1]]
 
+    faces = [
+        Face(
+            index=iface,
+            first_patch=first_patch[iface],
+            last_patch=last_patch[iface],
+            reflectivity=problem.reflectivities[iface],
+            emissivity=problem.emissivities[iface],
+        )
+        for iface in range(6)
+    ]
+
+    # Subdivide each face into numpat patches.
     for iface in range(6):
-        numpat = loop[iface][1] - loop[iface][0] + 1
-        tmp3 = box[iface - 1] if iface >= 3 else 0.0
-        numcol = int(math.sqrt(numpat * box[iface] / box[iface + 1]) + 0.5)
-        if numcol > numpat:
-            numcol = numpat
-        if numcol == 0:
-            numcol = 1
+        face = faces[iface]
+        numpat = face.patch_count
+        depth = box[iface - 1] if iface >= 3 else 0.0
+        numcol = min(
+            numpat,
+            max(1, int(math.sqrt(numpat * box[iface] / box[iface + 1]) + 0.5)),
+        )
         width = box[iface] / numcol
-        itmp1 = numcol - 1
-        tmp1 = 0.0
-        for _icol in range(numcol):
-            itmp2 = itmp1 // numcol
-            numrow = (itmp1 + numpat) // numcol - itmp2
+        row_cursor = numcol - 1
+        offset_w = 0.0
+        for _ in range(numcol):
+            row_offset = row_cursor // numcol
+            numrow = (row_cursor + numpat) // numcol - row_offset
             if numrow == 0:
                 print("Eccentric box requires more patches.")
                 return None
             height = box[iface + 1] / numrow
-            tmp2 = 0.0
-            tmp4 = width * height * (8.0 * math.pi)
-            lead = loop[iface][0] + itmp2
-            last = lead + numrow
-            for ipatch in range(lead, last):
-                size[0][ipatch] = width
-                size[1][ipatch] = height
-                place[0][ipatch] = tmp1
-                place[1][ipatch] = tmp2
-                place[2][ipatch] = tmp3
-                area[ipatch] = tmp4
-                tmp2 += height
-            tmp1 += width
-            itmp1 += numpat
+            offset_h = 0.0
+            patch_area = width * height * (8.0 * math.pi)
+            lead = face.first_patch + row_offset
+            for ipatch in range(lead, lead + numrow):
+                face.patches.append(
+                    Patch(
+                        index=ipatch,
+                        place=(offset_w, offset_h, depth),
+                        width=width,
+                        height=height,
+                        area=patch_area,
+                    )
+                )
+                offset_h += height
+            offset_w += width
+            row_cursor += numpat
 
-    return loop, place, size, area
-
-
-def SetUp1(npatch, loop, coeff, place, size):
-    """Form factors for parallel (opposite) faces."""
-    sqrt = math.sqrt
-    log = math.log
-    atan = math.atan
-
-    for iface in range(3):
-        jface = iface + 3
-        tmp1 = place[2][loop[jface][0]] ** 2
-        d = [[[0.0, 0.0], [0.0, 0.0]] for _ in range(2)]
-        d2 = [[[0.0, 0.0], [0.0, 0.0]] for _ in range(2)]
-        for ipatch in range(loop[iface][0], loop[iface][1] + 1):
-            for jpatch in range(loop[jface][0], loop[jface][1] + 1):
-                for j in range(2):
-                    base = place[j][jpatch] - place[j][ipatch]
-                    sj = size[j][jpatch]
-                    si = size[j][ipatch]
-                    d[0][0][j] = base
-                    d[1][0][j] = base + sj
-                    d[0][1][j] = base - si
-                    d[1][1][j] = base + sj - si
-                    d2[0][0][j] = d[0][0][j] * d[0][0][j]
-                    d2[1][0][j] = d[1][0][j] * d[1][0][j]
-                    d2[0][1][j] = d[0][1][j] * d[0][1][j]
-                    d2[1][1][j] = d[1][1][j] * d[1][1][j]
-
-                tmp2 = 0.0
-                for j in range(2):
-                    for m in range(2):
-                        for i in range(2):
-                            tmp3 = d2[m][i][1 - j] + tmp1
-                            tmp4 = sqrt(tmp3)
-                            tmp5 = 1.0 / tmp4
-                            tmp8 = 0.0
-                            for k in range(2):
-                                for n in range(2):
-                                    tmp6 = d2[k][n][j]
-                                    tmp7 = d[k][n][j]
-                                    tmp2 = (tmp3 - tmp6) * log(tmp6 + tmp3) - tmp2
-                                    tmp8 = -tmp7 * atan(tmp7 * tmp5) - tmp8
-                                tmp2 = -tmp2
-                                tmp8 = -tmp8
-                            tmp2 = -4.0 * tmp4 * tmp8 - tmp2
-                        tmp2 = -tmp2
-                coeff[ipatch][jpatch] = tmp2
-                coeff[jpatch][ipatch] = tmp2
+    return Geometry(box=box, faces=faces)
 
 
-def SetUp2(npatch, loop, coeff, place, size):
-    """Form factors for orthogonal (adjacent) faces."""
-    sqrt = math.sqrt
-    log = math.log
-    atan = math.atan
-
-    for iface in range(6):
-        for m in range(2):
-            jface = (iface + m + 1) % 6
-            r = [[0.0, 0.0], [0.0, 0.0]]
-            r2 = [[0.0, 0.0], [0.0, 0.0]]
-            s = [[0.0, 0.0], [0.0, 0.0]]
-            for ipatch in range(loop[iface][0], loop[iface][1] + 1):
-                for jpatch in range(loop[jface][0], loop[jface][1] + 1):
-                    r[0][0] = place[m][jpatch] - place[1 - m][ipatch]
-                    r[1][0] = r[0][0] + size[m][jpatch]
-                    r[0][1] = r[0][0] - size[1 - m][ipatch]
-                    r[1][1] = r[1][0] - size[1 - m][ipatch]
-                    s[0][0] = place[m][ipatch] - place[2][jpatch]
-                    s[1][0] = s[0][0] + size[m][ipatch]
-                    s[0][1] = place[1 - m][jpatch] - place[2][ipatch]
-                    s[1][1] = s[0][1] + size[1 - m][jpatch]
-
-                    for i in range(2):
-                        for j in range(2):
-                            s[i][j] = s[i][j] * s[i][j]
-                            r2[i][j] = r[i][j] * r[i][j]
-                        s[i][1] += 1e-35
-
-                    tmp2 = 0.0
-                    for i in range(2):
-                        for j in range(2):
-                            tmp3 = s[i][0] + s[j][1]
-                            tmp4 = sqrt(tmp3)
-                            tmp5 = 1.0 / tmp4
-                            tmp8 = 0.0
-                            for k in range(2):
-                                for n in range(2):
-                                    tmp6 = r2[k][n]
-                                    tmp7 = r[k][n]
-                                    tmp2 = (tmp3 - tmp6) * log(tmp6 + tmp3) - tmp2
-                                    tmp8 = -tmp7 * atan(tmp7 * tmp5) - tmp8
-                                tmp2 = -tmp2
-                                tmp8 = -tmp8
-                            tmp2 = -4.0 * tmp4 * tmp8 - tmp2
-                        tmp2 = -tmp2
-
-                    tmp2 = abs(tmp2)
-                    coeff[ipatch][jpatch] = tmp2
-                    coeff[jpatch][ipatch] = tmp2
+# ---------------------------------------------------------------------------
+# The linear system (SetUp1/SetUp2/SetUp3/Solver/Verify in the C code)
+# ---------------------------------------------------------------------------
 
 
-def SetUp3(npatch, loop, area, rho, emiss, coeff, diag, rhs):
-    """Normalise rows and fold in reflectivities and emissivities."""
-    for iface in range(6):
-        vtmp1 = [1.0 / rho[iface][j] for j in range(3)]
-        vtmp2 = [emiss[iface][j] * vtmp1[j] for j in range(3)]
-
-        for ipatch in range(loop[iface][0], loop[iface][1] + 1):
-            row = coeff[ipatch]
-            total = 0.0
-            for jpatch in range(loop[iface][0]):
-                total += row[jpatch]
-            for jpatch in range(loop[iface][1] + 1, npatch):
-                total += row[jpatch]
-
-            if abs(total - area[ipatch]) > (0.5e-9 * total):
-                print("Total form factor is too far from unity.")
-                return False
-
-            total = -total
-            for jpatch in range(loop[iface][0], loop[iface][1] + 1):
-                row[jpatch] = 0.0
-            for j in range(3):
-                diag[j][ipatch] = vtmp1[j] * total
-                rhs[j][ipatch] = vtmp2[j] * total
-
-    return True
+def _ddot(a: List[float], b: List[float], n: int) -> float:
+    """Dot product of the first ``n`` elements of two rows."""
+    return sum(left * right for left, right in islice(zip(a, b), n))
 
 
-def Solver(npatch, non0, coeff, diag, rhs, result):
-    """LDL^T factorisation and backsolve for the three colour channels."""
-    for m in range(3):
-        for i in range(non0, npatch):
-            coeff[i][i] = diag[m][i]
-            result[m][i] = rhs[m][i]
-            ci = coeff[i]
-            for j in range(i):
-                ci[j] = coeff[j][i]
+def _coupling(
+    distance2: float,
+    squares: Tuple[Tuple[float, float], Tuple[float, float]],
+    lengths: Tuple[Tuple[float, float], Tuple[float, float]],
+    accumulated: float,
+) -> float:
+    """One 2x2 evaluation of the analytic form-factor integral.
 
-        for j in range(non0):
-            coeff[j][j] = 1.0 / diag[m][j]
-            result[m][j] = rhs[m][j]
-
-        for j in range(non0, npatch):
-            cj = coeff[j]
-            for k in range(non0, j):
-                cj[k] -= _ddot_prefix(coeff[k], cj, k)
-            for k in range(j):
-                tmp1 = cj[k]
-                cj[k] = tmp1 * coeff[k][k]
-                cj[j] -= tmp1 * cj[k]
-            cj[j] = 1.0 / cj[j]
-
-        rm = result[m]
-        for k in range(non0, npatch):
-            rm[k] -= _ddot_prefix(rm, coeff[k], k)
-
-        for k in range(npatch):
-            rm[k] *= coeff[k][k]
-
-        for k in range(npatch - 2, non0 - 1, -1):
-            n = npatch - (k + 1)
-            total = 0.0
-            for t in range(n):
-                total += rm[k + 1 + t] * coeff[k + 1 + t][k]
-            rm[k] -= total
-
-        for k in range(non0 - 1, -1, -1):
-            n = npatch - non0
-            total = 0.0
-            for t in range(n):
-                total += rm[non0 + t] * coeff[non0 + t][k]
-            rm[k] -= total
+    ``distance2`` is the squared separation along the coupling axis,
+    ``squares`` the squared corner offsets and ``lengths`` the corresponding
+    signed offsets.  ``accumulated`` is the running term carried through the
+    caller's nested loops; the arithmetic order matches the C reference.
+    """
+    root = math.sqrt(distance2)
+    inverse_root = 1.0 / root
+    log_term = accumulated
+    angle_term = 0.0
+    for square_row, length_row in zip(squares, lengths):
+        for square, length in zip(square_row, length_row):
+            log_term = (distance2 - square) * math.log(square + distance2) - log_term
+            angle_term = -length * math.atan(length * inverse_root) - angle_term
+        log_term = -log_term
+        angle_term = -angle_term
+    return -4.0 * root * angle_term - log_term
 
 
-def Storer(npatch, loop, result, place, size):
+def _parallel_corners(
+    ipatch: Patch, jpatch: Patch
+) -> Tuple[
+    Tuple[Tuple[float, float], Tuple[float, float]],
+    Tuple[Tuple[float, float], Tuple[float, float]],
+]:
+    """Corner offsets between two parallel patches, one 2x2 grid per axis."""
+    grids = []
+    for axis in range(2):
+        delta = jpatch.place[axis] - ipatch.place[axis]
+        own = ipatch.extent(axis)
+        other = jpatch.extent(axis)
+        grids.append(
+            (
+                (delta, delta - own),
+                (delta + other, delta + other - own),
+            )
+        )
+    return grids[0], grids[1]
+
+
+def _orthogonal_corners(
+    ipatch: Patch, jpatch: Patch, axis: int
+) -> Tuple[
+    Tuple[Tuple[float, float], Tuple[float, float]],
+    Tuple[Tuple[float, float], Tuple[float, float]],
+    Tuple[Tuple[float, float], Tuple[float, float]],
+]:
+    """Corner offsets for two orthogonal patches: ``r``, ``r**2`` and the
+    squared ``s`` offsets, including the 1e-35 singularity bump."""
+    r00 = jpatch.place[axis] - ipatch.place[1 - axis]
+    ipatch_other = ipatch.extent(1 - axis)
+    r = (
+        (r00, r00 - ipatch_other),
+        (r00 + jpatch.extent(axis), r00 + jpatch.extent(axis) - ipatch_other),
+    )
+    r2 = tuple(tuple(value * value for value in row) for row in r)
+
+    s00 = ipatch.place[axis] - jpatch.place[2]
+    s01 = jpatch.place[1 - axis] - ipatch.place[2]
+    s = (
+        (s00, s01),
+        (s00 + ipatch.extent(axis), s01 + jpatch.extent(1 - axis)),
+    )
+    s2 = tuple(
+        (row[0] * row[0], row[1] * row[1] + 1e-35)
+        for row in s
+    )
+    return r, r2, s2
+
+
+class RadiositySystem:
+    """The radiosity linear system for one problem size.
+
+    The matrix is stored as rows (``coeff[i]`` is patch *i*'s equation), the
+    per-channel diagonal terms, right-hand sides and solutions are
+    dictionaries keyed by colour.
+    """
+
+    def __init__(self, geometry: Geometry) -> None:
+        n = geometry.patch_count
+        self.geometry = geometry
+        self.coeff: List[List[float]] = [[0.0] * n for _ in range(n)]
+        self.diag: Dict[str, List[float]] = {c: [0.0] * n for c in RGB}
+        self.rhs: Dict[str, List[float]] = {c: [0.0] * n for c in RGB}
+        self.result: Dict[str, List[float]] = {c: [0.0] * n for c in RGB}
+
+    # -- SetUp1: form factors for parallel (opposite) faces ----------------
+
+    def add_parallel_form_factors(self) -> None:
+        for face, opposite in zip(self.geometry.faces[:3], self.geometry.faces[3:]):
+            depth = opposite.patches[0].place[2]
+            depth2 = depth * depth
+            for ipatch in face:
+                for jpatch in opposite:
+                    d = _parallel_corners(ipatch, jpatch)
+                    d2 = tuple(
+                        tuple(tuple(value * value for value in row) for row in grid)
+                        for grid in d
+                    )
+                    total = 0.0
+                    for j in (0, 1):
+                        for m in (0, 1):
+                            for i in (0, 1):
+                                total = _coupling(
+                                    d2[1 - j][m][i] + depth2, d2[j], d[j], total
+                                )
+                            total = -total
+                    self.coeff[ipatch.index][jpatch.index] = total
+                    self.coeff[jpatch.index][ipatch.index] = total
+
+    # -- SetUp2: form factors for orthogonal (adjacent) faces --------------
+
+    def add_orthogonal_form_factors(self) -> None:
+        for iface, face in enumerate(self.geometry.faces):
+            for m in (0, 1):
+                adjacent = self.geometry.faces[(iface + m + 1) % 6]
+                for ipatch in face:
+                    for jpatch in adjacent:
+                        # size[m] is the width direction and size[1 - m] the
+                        # height direction, exactly as in the C reference.
+                        r, r2, s = _orthogonal_corners(ipatch, jpatch, m)
+                        total = 0.0
+                        for i in (0, 1):
+                            for j in (0, 1):
+                                total = _coupling(s[i][0] + s[j][1], r2, r, total)
+                            total = -total
+                        total = abs(total)
+                        self.coeff[ipatch.index][jpatch.index] = total
+                        self.coeff[jpatch.index][ipatch.index] = total
+
+    # -- SetUp3: normalise rows and fold in rho/emissivities ---------------
+
+    def normalise(self) -> bool:
+        """Make every row sum to the patch area and set diag/rhs. False on
+        a form-factor check failure."""
+        for face in self.geometry.faces:
+            inverse_rho = {c: 1.0 / face.reflectivity[c] for c in RGB}
+            scaled_emiss = {c: face.emissivity[c] * inverse_rho[c] for c in RGB}
+
+            for patch in face:
+                row = self.coeff[patch.index]
+                total = sum(islice(row, 0, face.first_patch))
+                total += sum(islice(row, face.last_patch + 1, None))
+
+                # Make sure the row sum (total form factor) is close to 1:
+                if abs(total - patch.area) > (0.5e-9 * total):
+                    print("Total form factor is too far from unity.")
+                    return False
+
+                total = -total
+                # Set coplanar patch interactions to zero.
+                row[face.first_patch : face.last_patch + 1] = [0.0] * face.patch_count
+                # Assign diagonal entries and right-hand sides.
+                for colour in RGB:
+                    self.diag[colour][patch.index] = inverse_rho[colour] * total
+                    self.rhs[colour][patch.index] = scaled_emiss[colour] * total
+        return True
+
+    # -- Solver: LDL^T factorisation and backsolve, per colour channel -----
+
+    def solve(self) -> None:
+        """Factor and backsolve the system; no pivoting is needed because
+        the matrix is diagonally dominant."""
+        non0 = self.geometry.first_non_coplanar
+        npatch = self.geometry.patch_count
+        coeff = self.coeff
+
+        for colour in RGB:
+            diag = self.diag[colour]
+            rhs = self.rhs[colour]
+            solution = self.result[colour]
+
+            # Load the lower triangle of coefficients, diagonal, and
+            # solution vector.
+            for i in range(non0, npatch):
+                coeff[i][i] = diag[i]
+                solution[i] = rhs[i]
+                for j in range(i):
+                    coeff[i][j] = coeff[j][i]
+
+            for j in range(non0):
+                coeff[j][j] = 1.0 / diag[j]
+                solution[j] = rhs[j]
+
+            # Factor the matrix, writing factors over the original matrix.
+            for j in range(non0, npatch):
+                for k in range(non0, j):
+                    coeff[j][k] -= _ddot(coeff[k], coeff[j], k)
+                for k in range(j):
+                    tmp1 = coeff[j][k]
+                    coeff[j][k] = tmp1 * coeff[k][k]
+                    coeff[j][j] -= tmp1 * coeff[j][k]
+                coeff[j][j] = 1.0 / coeff[j][j]
+
+            # Backsolve, in three stages (for L, D, and L transpose).
+            for k in range(non0, npatch):
+                solution[k] -= _ddot(solution, coeff[k], k)
+
+            for k in range(npatch):
+                solution[k] *= coeff[k][k]
+
+            # Column access across rows (the C code uses stride NMAX):
+            for k in range(npatch - 2, non0 - 1, -1):
+                solution[k] -= sum(
+                    solution[j] * coeff[j][k] for j in range(k + 1, npatch)
+                )
+
+            for k in range(non0 - 1, -1, -1):
+                solution[k] -= sum(
+                    solution[j] * coeff[j][k] for j in range(non0, npatch)
+                )
+
+    # -- Verify: residual check, run after the clock has stopped -----------
+
+    def verify(self) -> bool:
+        total = 0.0
+        for colour in RGB:
+            diag = self.diag[colour]
+            solution = self.result[colour]
+            for i in range(self.geometry.patch_count):
+                self.coeff[i][i] = diag[i]
+                for j in range(i):
+                    self.coeff[i][j] = self.coeff[j][i]
+
+            # The norms are per channel (only the last channel's survive
+            # into the residual denominator); the residual total itself
+            # accumulates across all three channels.
+            anorm = 0.0
+            xnorm = 0.0
+            for j in range(self.geometry.patch_count):
+                tmp2 = self.rhs[colour][j]
+                row = self.coeff[j]
+                for i in range(self.geometry.patch_count):
+                    tmp2 -= row[i] * solution[i]
+                    anorm = max(anorm, abs(row[i]))
+                xnorm = max(xnorm, abs(solution[j]))
+                total += abs(tmp2)
+
+        denom = anorm * xnorm
+        residual = total / denom if denom != 0.0 else float("inf")
+        if not math.isfinite(residual) or residual > 3.0 * EPS:
+            print("Residual is too large: %g" % residual)
+            return False
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Output (Storer in the C code)
+# ---------------------------------------------------------------------------
+
+
+def store(geometry: Geometry, result: Dict[str, List[float]]) -> bool:
     """Write patch geometry and radiosities to ``answer``."""
     try:
-        outfile = open("answer", "w", encoding="utf-8")
+        with open("answer", "w", encoding="utf-8") as outfile:
+            outfile.write("%d patches:\n" % geometry.patch_count)
+            outfile.write(
+                " Patch  Face       Position in w, h, d              Width     Height\n"
+            )
+            for face in geometry.faces:
+                for patch in face:
+                    outfile.write(
+                        "%5d   %4d%11.5f%11.5f%11.5f  %11.5f%11.5f\n"
+                        % (
+                            patch.index + 1,
+                            face.index + 1,
+                            patch.place[0],
+                            patch.place[1],
+                            patch.place[2],
+                            patch.width,
+                            patch.height,
+                        )
+                    )
+
+            outfile.write("\n Patch  Face  Radiosities\n")
+            for face in geometry.faces:
+                for patch in face:
+                    outfile.write(
+                        "%5d   %4d%12.8f%12.8f%12.8f\n"
+                        % (
+                            patch.index + 1,
+                            face.index + 1,
+                            result["R"][patch.index],
+                            result["G"][patch.index],
+                            result["B"][patch.index],
+                        )
+                    )
     except OSError:
         print("Unable to open 'answer' file.")
         return False
-
-    with outfile:
-        outfile.write("%d patches:\n" % npatch)
-        outfile.write(
-            " Patch  Face       Position in w, h, d              Width     Height\n"
-        )
-        for iface in range(6):
-            for ipatch in range(loop[iface][0], loop[iface][1] + 1):
-                outfile.write(
-                    "%5d   %4d%11.5f%11.5f%11.5f  %11.5f%11.5f\n"
-                    % (
-                        ipatch + 1,
-                        iface + 1,
-                        place[0][ipatch],
-                        place[1][ipatch],
-                        place[2][ipatch],
-                        size[0][ipatch],
-                        size[1][ipatch],
-                    )
-                )
-
-        outfile.write("\n Patch  Face  Radiosities\n")
-        for iface in range(6):
-            for ipatch in range(loop[iface][0], loop[iface][1] + 1):
-                outfile.write(
-                    "%5d   %4d%12.8f%12.8f%12.8f\n"
-                    % (
-                        ipatch + 1,
-                        iface + 1,
-                        result[0][ipatch],
-                        result[1][ipatch],
-                        result[2][ipatch],
-                    )
-                )
     return True
 
 
-def Verify(npatch, coeff, diag, rhs, result):
-    """Check the residual after timing has stopped."""
-    total = 0.0
-    anorm = 0.0
-    xnorm = 0.0
-
-    for m in range(3):
-        for i in range(npatch):
-            coeff[i][i] = diag[m][i]
-            ci = coeff[i]
-            for j in range(i):
-                ci[j] = coeff[j][i]
-
-        anorm = 0.0
-        xnorm = 0.0
-        for j in range(npatch):
-            tmp2 = rhs[m][j]
-            row = coeff[j]
-            for i in range(npatch):
-                tmp2 -= row[i] * result[m][i]
-                anorm = max(anorm, abs(row[i]))
-            xnorm = max(xnorm, abs(result[m][j]))
-            total += abs(tmp2)
-
-    denom = anorm * xnorm
-    residual = total / denom if denom != 0.0 else float("inf")
-    if not math.isfinite(residual) or residual > 3.0 * EPS:
-        print("Residual is too large: %g" % residual)
-        return False
-    return True
+# ---------------------------------------------------------------------------
+# Meter: time one complete run of the benchmark at size npatch
+# ---------------------------------------------------------------------------
 
 
-def Meter(npatch):
+@dataclass(frozen=True)
+class PhaseTiming:
+    """One timed phase of the benchmark."""
+
+    name: str
+    seconds: float
+    operations: float
+
+    @property
+    def mflops(self) -> float:
+        return (self.operations / self.seconds) * 1e-6
+
+
+def _operation_counts(npatch: int, geometry: Geometry, non0: int) -> List[float]:
+    """The analytic LLNL-weighted operation count of each phase.
+
+    The counts follow src/slalom.h's weights and must not be changed.
+    """
+    box = geometry.box
+    p = [face.patch_count for face in geometry.faces]
+    tmp1 = 0.0
+    columns = 0
+    for i in range(6):
+        tmp1 += p[i] * p[i]
+        columns += int(math.sqrt(p[i] * box[i] / box[i + 1]) + 0.5)
+    opposite = p[0] * p[3] + p[1] * p[4] + p[2] * p[5]
+
+    ops = [0.0] * 7
+    ops[0] = 258.0
+    ops[1] = 154.0 + 8.0 * columns + npatch
+    ops[2] = 3.0 + 840.0 * opposite
+    ops[3] = 430.0 * (npatch * npatch - tmp1 - 2.0 * opposite) / 2.0
+    ops[4] = 72.0 + 9.0 * npatch + npatch * npatch - tmp1
+    ops[5] = (
+        npatch * (npatch * (npatch + 7.5) - 2.5)
+        - 21.0
+        + (non0 + 1) * ((non0 + 1) * (2.0 * (non0 + 1) - 16.5) + 35.5)
+        + (non0 + 1) * npatch * (9.0 - 3.0 * (non0 + 1))
+    )
+    ops[6] = 48.0 * npatch
+    return ops
+
+
+def Meter(npatch: int) -> Tuple[bool, float, float]:
     """Time one complete solve at problem size ``npatch``.
 
     Returns ``(ok, timing, work)``.
@@ -427,84 +642,69 @@ def Meter(npatch):
     except OSError:
         pass
 
-    box = [0.0] * 7
-    rho = [[0.0] * 3 for _ in range(6)]
-    emiss = [[0.0] * 3 for _ in range(6)]
-    area = [0.0] * npatch
-    coeff = [[0.0] * npatch for _ in range(npatch)]
-    diag = [[0.0] * npatch for _ in range(3)]
-    place = [[0.0] * npatch for _ in range(3)]
-    result = [[0.0] * npatch for _ in range(3)]
-    rhs = [[0.0] * npatch for _ in range(3)]
-    size = [[0.0] * npatch for _ in range(2)]
-
-    sec = [0.0] * 8
-    sec[0] = When()
-    if not Reader(box, rho, emiss):
+    stamps = [when()]
+    try:
+        problem = read_problem(geom_path())
+    except GeometryError as error:
+        print(error)
         return False, 0.0, 0.0
-    sec[1] = When()
+    stamps.append(when())
 
-    region = Region(npatch, box)
-    if region is None:
+    geometry = decompose(npatch, problem)
+    if geometry is None:
         return False, 0.0, 0.0
-    loop, place, size, area = region
-    sec[2] = When()
+    stamps.append(when())
 
-    SetUp1(npatch, loop, coeff, place, size)
-    sec[3] = When()
-    SetUp2(npatch, loop, coeff, place, size)
-    sec[4] = When()
-    if not SetUp3(npatch, loop, area, rho, emiss, coeff, diag, rhs):
+    system = RadiositySystem(geometry)
+    system.add_parallel_form_factors()
+    stamps.append(when())
+    system.add_orthogonal_form_factors()
+    stamps.append(when())
+    if not system.normalise():
         return False, 0.0, 0.0
-    sec[5] = When()
+    stamps.append(when())
 
-    non0 = loop[1][0]
-    Solver(npatch, non0, coeff, diag, rhs, result)
-    sec[6] = When()
+    system.solve()
+    stamps.append(when())
 
-    if not Storer(npatch, loop, result, place, size):
+    if not store(geometry, system.result):
         return False, 0.0, 0.0
-    sec[7] = When()
+    stamps.append(when())
 
-    timing = sec[7] - sec[0]
-    secs = [sec[i + 1] - sec[i] for i in range(7)]
+    timing = stamps[-1] - stamps[0]
+    seconds = [later - earlier for earlier, later in zip(stamps, stamps[1:])]
+    operations = _operation_counts(npatch, geometry, geometry.first_non_coplanar)
+    work = sum(operations)
 
-    p = [loop[i][1] - loop[i][0] + 1 for i in range(6)]
-    itmp1 = 0
-    tmp1 = 0.0
-    for i in range(6):
-        tmp1 += p[i] * p[i]
-        itmp1 += int(math.sqrt(p[i] * box[i] / box[i + 1]) + 0.5)
-    tmp2 = p[0] * p[3] + p[1] * p[4] + p[2] * p[5]
+    print_report(npatch, timing, seconds, operations, work)
+    system.verify()
+    return True, timing, work
 
-    ops = [0.0] * 7
-    ops[0] = 258.0
-    ops[1] = 154.0 + 8.0 * itmp1 + npatch
-    ops[2] = 3.0 + 840.0 * tmp2
-    ops[3] = 430.0 * (npatch * npatch - tmp1 - 2.0 * tmp2) / 2.0
-    ops[4] = 72.0 + 9.0 * npatch + npatch * npatch - tmp1
-    ops[5] = (
-        npatch * (npatch * (npatch + 7.5) - 2.5)
-        - 21.0
-        + (non0 + 1) * ((non0 + 1) * (2.0 * (non0 + 1) - 16.5) + 35.5)
-        + (non0 + 1) * npatch * (9.0 - 3.0 * (non0 + 1))
-    )
-    ops[6] = 48.0 * npatch
-    work = sum(ops)
+
+def print_report(
+    npatch: int, timing: float, seconds: List[float], operations: List[float], work: float
+) -> None:
+    """Display the timing-work-speed breakdown by routine."""
+    phases = [
+        PhaseTiming(name=task, seconds=sec or 0.001, operations=ops)
+        for task, sec, ops in zip(TASKS, seconds, operations)
+    ]
+    phases.append(PhaseTiming(name="TOTALS", seconds=timing, operations=work))
 
     print("%d patches:" % npatch)
     print(" Task  Seconds       Operations        MFLOPS    % of Time")
     fmt = "%6.6s%8.3f%17.0f%14.6f%10.1f %%"
-    for i in range(7):
-        if secs[i] == 0.0:
-            secs[i] = 0.001
-        mflops = (ops[i] / secs[i]) * 1e-6
-        pct = 100.0 * secs[i] / timing
-        print(fmt % (TASKS[i], secs[i], ops[i], mflops, pct))
-    print(fmt % ("TOTALS", timing, work, (work / timing) * 1e-6, 100.0))
-
-    Verify(npatch, coeff, diag, rhs, result)
-    return True, timing, work
+    for phase in phases:
+        print(
+            fmt
+            % (
+                phase.name,
+                phase.seconds,
+                phase.operations,
+                phase.mflops,
+                100.0 * phase.seconds / timing,
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
