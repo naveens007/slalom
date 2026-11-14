@@ -60,7 +60,11 @@ defaults to `2048` instead of the C value `8192`; override it with the
 
 For a fixed `n`, the port is numerically faithful: it reproduces the C
 operation counts exactly and writes an identical `answer` file (verified at
-`n = 234`). A quick run is:
+`n = 120`, `234` and `726`). Hot loops stay close to the C arithmetic order:
+dot products run through `math.sumprod` on Python 3.12+ (an exact-order
+`sum(map(mul, ...))` fallback keeps older interpreters byte-identical), the
+2x2 coupling integral is unrolled, and the solver restores/reads the matrix
+by C-speed slice operations. A quick run is:
 
 ```
 $ python3 src/slalom.py -t 1 -l 20 -u 300

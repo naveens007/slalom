@@ -39,7 +39,17 @@ import sys
 import time
 from dataclasses import dataclass, field
 from itertools import accumulate, islice
+from math import atan, log, sqrt
+from operator import mul
 from typing import Dict, Iterator, List, Optional, Tuple
+
+try:
+    # Python 3.12+: C-implemented compensated dot product, several times
+    # faster than any Python-level loop.  The fallback below preserves the
+    # exact left-to-right arithmetic order of the C reference.
+    from math import sumprod as _sumprod
+except ImportError:  # Python < 3.12
+    _sumprod = None
 
 # Pure Python cannot reach the C limit in practical time.  The env var makes
 # it easy to experiment without editing the source.
@@ -149,7 +159,7 @@ def read_problem(path: str) -> Problem:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class Patch:
     """One surface element of the box."""
 
@@ -274,84 +284,113 @@ def decompose(npatch: int, problem: Problem) -> Optional[Geometry]:
 
 def _ddot(a: List[float], b: List[float], n: int) -> float:
     """Dot product of the first ``n`` elements of two rows."""
-    return sum(left * right for left, right in islice(zip(a, b), n))
+    if _sumprod is None:
+        return sum(map(mul, a[:n], b[:n]))
+    return _sumprod(a[:n], b[:n])
+
+
+def _dot_from(a: List[float], b: List[float], start: int) -> float:
+    """Dot product of ``a[start:]`` and ``b[start:]`` (backsolve columns)."""
+    if _sumprod is None:
+        return sum(map(mul, a[start:], b[start:]))
+    return _sumprod(a[start:], b[start:])
 
 
 def _coupling(
     distance2: float,
-    squares: Tuple[Tuple[float, float], Tuple[float, float]],
-    lengths: Tuple[Tuple[float, float], Tuple[float, float]],
+    squares: Tuple[float, float, float, float],
+    lengths: Tuple[float, float, float, float],
     accumulated: float,
 ) -> float:
     """One 2x2 evaluation of the analytic form-factor integral.
 
-    ``distance2`` is the squared separation along the coupling axis,
-    ``squares`` the squared corner offsets and ``lengths`` the corresponding
-    signed offsets.  ``accumulated`` is the running term carried through the
-    caller's nested loops; the arithmetic order matches the C reference.
+    ``distance2`` is the squared separation along the coupling axis and
+    ``squares`` / ``lengths`` are the flattened (k, n) corner grids —
+    ``(k0n0, k0n1, k1n0, k1n1)`` — of squared and signed offsets.
+    ``accumulated`` is the running term carried through the caller's nested
+    loops.  The arithmetic order matches the C reference; the 2x2 loops are
+    unrolled because this routine dominates SetUp1/SetUp2.
     """
-    root = math.sqrt(distance2)
+    root = sqrt(distance2)
     inverse_root = 1.0 / root
+    sq00, sq01, sq10, sq11 = squares
+    l00, l01, l10, l11 = lengths
     log_term = accumulated
     angle_term = 0.0
-    for square_row, length_row in zip(squares, lengths):
-        for square, length in zip(square_row, length_row):
-            log_term = (distance2 - square) * math.log(square + distance2) - log_term
-            angle_term = -length * math.atan(length * inverse_root) - angle_term
-        log_term = -log_term
-        angle_term = -angle_term
+    log_term = (distance2 - sq00) * log(sq00 + distance2) - log_term
+    angle_term = -l00 * atan(l00 * inverse_root) - angle_term
+    log_term = (distance2 - sq01) * log(sq01 + distance2) - log_term
+    angle_term = -l01 * atan(l01 * inverse_root) - angle_term
+    log_term = -log_term
+    angle_term = -angle_term
+    log_term = (distance2 - sq10) * log(sq10 + distance2) - log_term
+    angle_term = -l10 * atan(l10 * inverse_root) - angle_term
+    log_term = (distance2 - sq11) * log(sq11 + distance2) - log_term
+    angle_term = -l11 * atan(l11 * inverse_root) - angle_term
+    log_term = -log_term
+    angle_term = -angle_term
     return -4.0 * root * angle_term - log_term
 
 
 def _parallel_corners(
     ipatch: Patch, jpatch: Patch
 ) -> Tuple[
-    Tuple[Tuple[float, float], Tuple[float, float]],
-    Tuple[Tuple[float, float], Tuple[float, float]],
+    Tuple[float, float, float, float],
+    Tuple[float, float, float, float],
+    Tuple[float, float, float, float],
+    Tuple[float, float, float, float],
 ]:
-    """Corner offsets between two parallel patches, one 2x2 grid per axis."""
+    """Corner offsets between two parallel patches, one flat 2x2 grid per
+    axis: ``(squares0, lengths0, squares1, lengths1)``.  Each grid is the
+    flattened (k, n) corner table ``(delta, delta - own, delta + other,
+    delta + other - own)``, squared for the squares grids."""
     grids = []
     for axis in range(2):
         delta = jpatch.place[axis] - ipatch.place[axis]
         own = ipatch.extent(axis)
         other = jpatch.extent(axis)
+        one = delta
+        two = delta - own
+        three = delta + other
+        four = three - own
         grids.append(
             (
-                (delta, delta - own),
-                (delta + other, delta + other - own),
+                (one * one, two * two, three * three, four * four),
+                (one, two, three, four),
             )
         )
-    return grids[0], grids[1]
+    return grids[0][0], grids[0][1], grids[1][0], grids[1][1]
 
 
 def _orthogonal_corners(
     ipatch: Patch, jpatch: Patch, axis: int
 ) -> Tuple[
-    Tuple[Tuple[float, float], Tuple[float, float]],
-    Tuple[Tuple[float, float], Tuple[float, float]],
-    Tuple[Tuple[float, float], Tuple[float, float]],
+    Tuple[float, float, float, float],
+    Tuple[float, float, float, float],
+    Tuple[float, float, float, float],
 ]:
-    """Corner offsets for two orthogonal patches: ``r``, ``r**2`` and the
-    squared ``s`` offsets, including the 1e-35 singularity bump."""
+    """Corner offsets for two orthogonal patches: the squared ``r`` grid
+    (flattened (k, n)), the signed ``r`` grid, and the squared ``s`` grid
+    including the 1e-35 singularity bump."""
     r00 = jpatch.place[axis] - ipatch.place[1 - axis]
     ipatch_other = ipatch.extent(1 - axis)
-    r = (
-        (r00, r00 - ipatch_other),
-        (r00 + jpatch.extent(axis), r00 + jpatch.extent(axis) - ipatch_other),
-    )
-    r2 = tuple(tuple(value * value for value in row) for row in r)
+    r01 = r00 - ipatch_other
+    r10 = r00 + jpatch.extent(axis)
+    r11 = r10 - ipatch_other
+    squares_r = (r00 * r00, r01 * r01, r10 * r10, r11 * r11)
+    lengths_r = (r00, r01, r10, r11)
 
     s00 = ipatch.place[axis] - jpatch.place[2]
     s01 = jpatch.place[1 - axis] - ipatch.place[2]
-    s = (
-        (s00, s01),
-        (s00 + ipatch.extent(axis), s01 + jpatch.extent(1 - axis)),
+    s10 = s00 + ipatch.extent(axis)
+    s11 = s01 + jpatch.extent(1 - axis)
+    squares_s = (
+        s00 * s00,
+        s01 * s01 + 1e-35,
+        s10 * s10,
+        s11 * s11 + 1e-35,
     )
-    s2 = tuple(
-        (row[0] * row[0], row[1] * row[1] + 1e-35)
-        for row in s
-    )
-    return r, r2, s2
+    return squares_r, lengths_r, squares_s
 
 
 class RadiositySystem:
@@ -373,30 +412,35 @@ class RadiositySystem:
     # -- SetUp1: form factors for parallel (opposite) faces ----------------
 
     def add_parallel_form_factors(self) -> None:
+        coeff = self.coeff
         for face, opposite in zip(self.geometry.faces[:3], self.geometry.faces[3:]):
             depth = opposite.patches[0].place[2]
             depth2 = depth * depth
             for ipatch in face:
                 for jpatch in opposite:
-                    d = _parallel_corners(ipatch, jpatch)
-                    d2 = tuple(
-                        tuple(tuple(value * value for value in row) for row in grid)
-                        for grid in d
-                    )
+                    q0, l0, q1, l1 = _parallel_corners(ipatch, jpatch)
                     total = 0.0
                     for j in (0, 1):
+                        if j == 0:
+                            squares, lengths, other_squares = q0, l0, q1
+                        else:
+                            squares, lengths, other_squares = q1, l1, q0
                         for m in (0, 1):
                             for i in (0, 1):
                                 total = _coupling(
-                                    d2[1 - j][m][i] + depth2, d2[j], d[j], total
+                                    other_squares[m + m + i] + depth2,
+                                    squares,
+                                    lengths,
+                                    total,
                                 )
                             total = -total
-                    self.coeff[ipatch.index][jpatch.index] = total
-                    self.coeff[jpatch.index][ipatch.index] = total
+                    coeff[ipatch.index][jpatch.index] = total
+                    coeff[jpatch.index][ipatch.index] = total
 
     # -- SetUp2: form factors for orthogonal (adjacent) faces --------------
 
     def add_orthogonal_form_factors(self) -> None:
+        coeff = self.coeff
         for iface, face in enumerate(self.geometry.faces):
             for m in (0, 1):
                 adjacent = self.geometry.faces[(iface + m + 1) % 6]
@@ -404,15 +448,16 @@ class RadiositySystem:
                     for jpatch in adjacent:
                         # size[m] is the width direction and size[1 - m] the
                         # height direction, exactly as in the C reference.
-                        r, r2, s = _orthogonal_corners(ipatch, jpatch, m)
+                        r2, r, s2 = _orthogonal_corners(ipatch, jpatch, m)
                         total = 0.0
                         for i in (0, 1):
+                            si = s2[i + i]
                             for j in (0, 1):
-                                total = _coupling(s[i][0] + s[j][1], r2, r, total)
+                                total = _coupling(si + s2[j + j + 1], r2, r, total)
                             total = -total
                         total = abs(total)
-                        self.coeff[ipatch.index][jpatch.index] = total
-                        self.coeff[jpatch.index][ipatch.index] = total
+                        coeff[ipatch.index][jpatch.index] = total
+                        coeff[jpatch.index][ipatch.index] = total
 
     # -- SetUp3: normalise rows and fold in rho/emissivities ---------------
 
@@ -451,18 +496,27 @@ class RadiositySystem:
         npatch = self.geometry.patch_count
         coeff = self.coeff
 
+        # Pristine copy of the matrix as SetUp/normalise built it: the
+        # factorisation overwrites the lower triangle, and every colour
+        # channel needs the original back.  Restoring by slice assignment
+        # is C-speed, instead of the per-element loop the C reference uses
+        # (its upper triangle doubles as the pristine copy).  verify()
+        # reuses the snapshot to rebuild the symmetric matrix.
+        original = [row[:] for row in coeff]
+        self._original_rows = original
+
         for colour in RGB:
             diag = self.diag[colour]
             rhs = self.rhs[colour]
             solution = self.result[colour]
 
-            # Load the lower triangle of coefficients, diagonal, and
-            # solution vector.
+            # Restore the lower triangle and diagonal of the coefficients,
+            # and the solution vector.
             for i in range(non0, npatch):
-                coeff[i][i] = diag[i]
+                row = coeff[i]
+                row[:i] = original[i][:i]
+                row[i] = diag[i]
                 solution[i] = rhs[i]
-                for j in range(i):
-                    coeff[i][j] = coeff[j][i]
 
             for j in range(non0):
                 coeff[j][j] = 1.0 / diag[j]
@@ -470,13 +524,14 @@ class RadiositySystem:
 
             # Factor the matrix, writing factors over the original matrix.
             for j in range(non0, npatch):
+                row_j = coeff[j]
                 for k in range(non0, j):
-                    coeff[j][k] -= _ddot(coeff[k], coeff[j], k)
+                    row_j[k] -= _ddot(coeff[k], row_j, k)
                 for k in range(j):
-                    tmp1 = coeff[j][k]
-                    coeff[j][k] = tmp1 * coeff[k][k]
-                    coeff[j][j] -= tmp1 * coeff[j][k]
-                coeff[j][j] = 1.0 / coeff[j][j]
+                    tmp1 = row_j[k]
+                    row_j[k] = tmp1 * coeff[k][k]
+                    row_j[j] -= tmp1 * row_j[k]
+                row_j[j] = 1.0 / row_j[j]
 
             # Backsolve, in three stages (for L, D, and L transpose).
             for k in range(non0, npatch):
@@ -485,42 +540,47 @@ class RadiositySystem:
             for k in range(npatch):
                 solution[k] *= coeff[k][k]
 
-            # Column access across rows (the C code uses stride NMAX):
+            # Column access across rows: one C-speed transpose turns the
+            # column sweeps into the same fast dot products as the rest.
+            columns = list(zip(*coeff))
             for k in range(npatch - 2, non0 - 1, -1):
-                solution[k] -= sum(
-                    solution[j] * coeff[j][k] for j in range(k + 1, npatch)
-                )
+                solution[k] -= _dot_from(solution, columns[k], k + 1)
 
             for k in range(non0 - 1, -1, -1):
-                solution[k] -= sum(
-                    solution[j] * coeff[j][k] for j in range(non0, npatch)
-                )
+                solution[k] -= _dot_from(solution, columns[k], non0)
 
     # -- Verify: residual check, run after the clock has stopped -----------
 
     def verify(self) -> bool:
         total = 0.0
+        npatch = self.geometry.patch_count
+        coeff = self.coeff
+        original = getattr(self, "_original_rows", None)
         for colour in RGB:
             diag = self.diag[colour]
             solution = self.result[colour]
-            for i in range(self.geometry.patch_count):
-                self.coeff[i][i] = diag[i]
-                for j in range(i):
-                    self.coeff[i][j] = self.coeff[j][i]
+            # Rebuild the symmetric matrix: restore the lower triangle from
+            # the pristine snapshot (the factorisation overwrote it) and set
+            # the diagonal from this channel.
+            for i in range(npatch):
+                row = coeff[i]
+                if original is not None:
+                    row[:i] = original[i][:i]
+                else:
+                    for j in range(i):
+                        row[j] = coeff[j][i]
+                row[i] = diag[i]
 
             # The norms are per channel (only the last channel's survive
             # into the residual denominator); the residual total itself
             # accumulates across all three channels.
             anorm = 0.0
-            xnorm = 0.0
-            for j in range(self.geometry.patch_count):
-                tmp2 = self.rhs[colour][j]
-                row = self.coeff[j]
-                for i in range(self.geometry.patch_count):
-                    tmp2 -= row[i] * solution[i]
-                    anorm = max(anorm, abs(row[i]))
-                xnorm = max(xnorm, abs(solution[j]))
-                total += abs(tmp2)
+            for row in coeff:
+                anorm = max(anorm, max(map(abs, row)))
+            xnorm = max(map(abs, solution))
+            rhs = self.rhs[colour]
+            for j in range(npatch):
+                total += abs(rhs[j] - _ddot(coeff[j], solution, npatch))
 
         denom = anorm * xnorm
         residual = total / denom if denom != 0.0 else float("inf")
